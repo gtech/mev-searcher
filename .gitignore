@@ -74,3 +74,11 @@ typings/
 
 # FuseBox cache
 .fusebox/
+artifacts
+
+#sensitive env variables and data
+.env
+data
+
+#hardhat cache
+cache

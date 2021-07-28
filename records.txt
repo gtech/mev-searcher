@@ -1,0 +1,110 @@
+
+
+
+}
+
+Tasks:
+Write out search algorithm. We want to launch an asynchronous function that monitors the price of the assets, and if it calculates that the share of the debt is greater than its collateral, then it sends out the txn to liquidate.  Query the price every 5s and then calculate the debt ratios of all the current positons. 
+So let's make one query that populates a database with each position. I think each position will have a list of how much of each asset it's borrowing, as well as the amount of the collateral token that they have. But I'll have to look at the contract logic. Well do we want to mimic its bitmap logic or convert it into our own? Mimicking could avoid silly errors, let's start with that and convert later if we want.
+Create function that takes a positionId and then populates the db with that position's info.
+Every 5s the search alg finds the prices of all the relevant tokens with respect to liquidation. It then goes through the entire database, calcuting the debt share and comparing it to the current amount of collateral token. The search algorithm will also daily or more often repopulate the database with the debt share amounts and the collateral amount for 
+ Though, you may want to include stable pairs that include tether, since it will eventually demolish its peg. Holy fuck that means a lot of these 3CRV positions could go belly-up. That would be catastrophic!!! We can simulate that by altering its peg in my forked chain somehow.
+Simualte the loss of tether peg
+Make the search algorithm asynchronous.
+Do a db blacklist after sending out a liquidation txn.
+Do db whitelist of the highest level of 
+Watch for the revert in the case that I make a loss due to losing like 5%+ to slippage.
+Use uniswaps v3 and v2 docs to find quote price. Make sure there is a fallback to v2. Use sushi's to do the same for liquidity. https://jamesbachini.com/uniswap-v3-trading-bot/ https://docs.uniswap.org/protocol/reference/smart-contracts
+For now use blacklists as rate limiters.
+Get through the basic routine of a liquidation and test it, then make it more robust.
+Scanning for opportunities logic.
+Calculate the percentages by toString, then cut off digits past 4 sig figs, then parseFloat and divide.
+ then find every account that doesn't use curve or USDT/USDC or DAI/USDC above 1 million. Put in blacklist db.
+Generalized bundle making logic
+Could eventually watch mempool for oracle updates in order to beat out competition. Not necessary early on.
+Make the contract upgradeable.
+I need to have the option to use the environment to load the private key, but for now I just want to use hardhat's signers since I'm just testing. I don't want to even risk using another wallet yet.
+Make sure you can withdraw any token from the contract.
+Check that the cToken has a high enough balance for the loan.
+
+
+Design:
+All of the transactions will actually be in the contract because it is a flashloan.
+ExecutorContract:
+  Take flashloan and get called back by C.R.E.A.M. finance
+  Liquidate the position
+  Pay back the flashloan.
+Liquidator:
+  Will scan for liquidateable positions.
+  Will figure out what LP I'm being paid in.
+  Will figure out what token I will need to pay off the position with.
+  Will create and send the bundle to flashbots that creates the contract and executes it.
+  Looks like we use the get debt and get collateral functions on each position to figure out whether someone is under water. 
+  We use getCollateralETHValue and getBorrowETHValue to figure out if someone is in default. We have a blacklist of stablecoins when they are used as collateral and borrowed. The positionIds that are blacklisted get queried again maybe once a day. We may need to acrue the debts ourselves for the most in-danger positions.
+  nextPositionId tells us the top end, pIDs start at 1.
+  getPositionDebts(uint positionId) gives us what tokens we need to accrue for a risky position.
+  That said, we do need an inventory of which tokens to accrue if the accrue function doesn't get called often enough otherwise.
+  There might be a way to calculate accrue without actually writing to chain.
+
+
+
+Questions:
+What mechanics bring someone into default?
+   What triggers will exist on chain to tell?
+How do I find those in most danger efficiently?
+Can I monitor for recovery mode?
+Do the position ID's rebalance after positions are closed? No.
+
+Gas optimization research: 
+https://arxiv.org/pdf/2008.05449.pdf
+https://sci-hub.do/10.1109/IWBOSE50093.2020.9050163
+https://medium.com/adoriasoft-media/optimizing-gas-usage-of-your-ethereum-smart-contracts-the-ultimate-guide-5fc54fde10cf
+
+
+
+block: 12556254
+depositedAlTokens: $2469281.14
+inbucket: $
+Address: 0x4740Fa6b32C5b41EBbF631fE1aF41e6Fff6e2388
+
+
+block:   12553594
+depositedAlTokens: $9999.12
+inbucket: $61296540.57
+Address: 0xf4ADC8369e83D6A599e51438D44B5e53A412f807
+depositedAlTokens: $548871.73
+inbucket: $
+Address: 0x0AC545310921E4885Dc4cf5F758D7C49e8974482
+depositedAlTokens: $15000.00
+inbucket: $91952956.54
+Address: 0x5BD359B943c61fB487DE38CB9Fdb7EBe047BD3A4
+
+five block later 0x0ac545310921e4885dc4cf5f758d7c49e8974482 forcetransmuted 0xf4ADC8369e83D6A599e51438D44B5e53A412f807
+
+Okay and 0x0AC's inbucket balance became 61,286,541.45 after forcing... There's no fucking way he just printed 61 million in one txn.
+
+It looks like every 10.8 minutes the distributions are calculated. So brute forcing might prove difficult.
+
+When inbucket is greater than depositedAlTokens that's when you can forceTransmute.
+
+block: 12492292
+inbucket: $121970306.68
+depositedAlTokens: $44.75
+profit: $121970261.93
+Address: 0x0efdDCf523FFe33a6f6Afa146563b3e3aE070932
+inbucket: $447821.02
+depositedAlTokens: $69.00
+profit: $447752.02
+Address: 0x6C39856620df9607d51b630555Cf3fB0dB0b570b
+
+Okay I'm pretty sure no one calls accrue ever. Which is... would that put the whole contract into default easily because it doesn't check how much it owes on its debt? I'd have to look more into it. My guess... well is it even possible that they're hugely overcollateralized? Because all their users can go down to 100% collateralization. Basically less leveraged users are subsidizing the highly leveraged users. In the worst case this entire thing could go into default. 
+
+-----------------------
+
+// I think the way to do it is to listen to the mempool, then bundle someone's staking with your own forceTransmute if you run the simulation and it looks like their inbucket will be greater than their staked, because when they stake, their inbucket will be updated. I still don't understand what the importance of the larger calculation on multiplegetuserinfo is. It seems superfluous compared to how much is done in the forcetransmute. Is it forward-looking to see how many dividends the person will get from the account update?  Oh yeah that's what it's doing. So it does seem like you're better off doing that multiple user calc.
+// That might give you a slight edge, if you do the calculation yourself, you can find which accounts will need to be transmuted on the next... ugh this still doesn't make much sense to me. Why would the transmuter work like this?
+  
+Okay it looks like this is only useful if you have a ton of altokens and you want to transmute them into dai ASAP. This is potentially a great arb when alUSD goes below peg but it's so niche. I don't think there is a way to force it to happen is there? If you could 1) Wait for a point where someone is going to have a huge inbucket surplus 2) force alUSD off peg 3) immediately force-transmute, then transmute and claim for yourself. You would probably need a lot of money for this to work though. Oh well, there's days of research mostly wasted. At least I now have a lot of tools for looking at the next protocol. Maybe there will be exceptions, but I get the feeling that stablecoins won't be a very good target because they move so little... maybe there is more to the protocol that will make it possible...
+// You would be able to make around $500-1000 per day with $10,000 bank roll by bundling an alUSD buy with a forcetransmute to stake to transmute and claim. But I don't have that kind of money right now. Oh wait it falls off peg less often than that though. So maybe not. Either way, it's too rich for my blood at the moment.
+// I feel like the liquity bot may be too high competition at this point. I think I would want it to listen for another recovery mode event. If that occurs, then it should sort for the most lucrative troves, then spend $500 on attempting to liquidate it. You could make it more complicated from there by saying use that ether to pay miners for a few more troves. Most likely though, people will be nuking troves immediately. Here's the thing though: if you ONLY nuke the top trove, that will cause other liquidation functions to fail in its place. No, it won't becaues that trove will be liquidated before they get executed. The only others that will lose out is if yours is part of a batch. None of the current bots look like they target multiple specific ones in sequence. Ideally I would have code to monitor the mempool to be sure that I outbid the PGA's. That would save me some gas that I could use to snipe more troves.  I need to figure out how far in advance that these bots are currently seeing a potential liquidation. 
+// So it looks like someone with millions is already doing the alchemix trick. Liquity has around 16k followers. Maybe that's around the sweet spot of exposure that I'm looking for. Alchemix only has one or two people doing that trick so it's not like 30k is entirely too big to be worth looking into though. Let's look for projects that are in that range.
