@@ -185,47 +185,54 @@ class Liquidator {
     }
 
     async createWERC20InfoEntry(collId, collToken){
-        //TODO This function needs to make sure the entry doesn't exist already or the upper functino does.
-        let LPtokenAddress;
+        let LPTokenAddress;
         switch (collToken) {
             case WMASTERCHEF_ADDRESS:
-                LPtokenAddress = await this.wMasterChefContract.getUnderlyingToken(collId);
+                LPTokenAddress = await this.wMasterChefContract.getUnderlyingToken(collId);
                 break;
             case CRV_ADDRESS:
-                LPtokenAddress = await this.CRVContract.getUnderlyingToken(collId);
+                LPTokenAddress = await this.CRVContract.getUnderlyingToken(collId);
                 break;
             case UNISWAP_WERC20_ADDRESS:
-                LPtokenAddress = await this.uniWERC20Contract.getUnderlyingToken(collId);
+                LPTokenAddress = await this.uniWERC20Contract.getUnderlyingToken(collId);
                 break;
             default:
                 console.log("Unrecognized WERC20 contract.")
                 return false;
                 break;
         }
-        this.werc20Info.insert({LPtokenAddress: LPtokenAddress, collId: collId, WERC20ContractAddress: collToken});
-        return LPtokenAddress;
+        this.werc20Info.insert({LPTokenAddress: LPTokenAddress, collId: collId._hex, WERC20ContractAddress: collToken});
+        return LPTokenAddress;
     }
 
     async getAndStorePosition(pID){
         let debts = await this.homoraBankContract.getPositionDebts(pID);
         let positionEntry = this.positions.findOne({'pID': pID});
         let position;
+        let LPTokenAddress;
+        let werc20Entry;
         if (positionEntry == null){
             position = await this.homoraBankContract.positions(pID);
-            let LPTokenAddress =  await this.createWERC20InfoEntry(position.collId, position.collToken);
-            this.positions.insert({pID: pID, collateralSize: position.collateralSize, debts: debts, LPtokenAddress: LPTokenAddress});
+            werc20Entry = this.werc20Info.findOne({'collId': position.collId._hex});
+            if (werc20Entry == null){
+                LPTokenAddress =  await this.createWERC20InfoEntry(position.collId, position.collToken);
+            } else {
+                LPTokenAddress = werc20Entry.LPTokenAddress;
+            }
+            this.positions.insert({pID: pID, collateralSize: position.collateralSize, debts: debts, LPTokenAddress: LPTokenAddress});
         } else {
             position = positionEntry;
+            werc20Entry = this.werc20Info.findOne({'LPTokenAddress': position.LPTokenAddress});
+            if (werc20Entry == null){
+                await this.createWERC20InfoEntry(position.collId, position.collToken);
+            }
             position.debts = debts;
             this.positions.update(position);
         }
 
-        console.log(position);
+        //Information I need to store for each position: pid, collateralSize, LPTokenAddress, debts from getPositionDebts.
 
-        //So right now we have 3 databases: a pricing database for each token, a WERC20 to LPTokenAddress database for 
-
-        //TODO Information I need to store for each position: pid, collateralSize, LPTokenAddress, debts from getPositionDebts.
-        //TODO Create database of collId, LPTokenAddress (this acts as the index in order to know which WERC20ContractAddress is relevant to pricing and sending to the ExecutorContract to burn the LPToken), WERC20ContractAddress(aka collToken)
+        //database of collId, LPTokenAddress (this acts as the index in order to know which WERC20ContractAddress is relevant to pricing and sending to the ExecutorContract to burn the LPToken), WERC20ContractAddress(aka collToken)
  
         //TODO collateral value calculation in ETH: is in my liquidate function.
         //TODO borrowed value calculation in ETH: Sum over all debtTokens
