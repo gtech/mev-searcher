@@ -197,15 +197,17 @@ class Liquidator {
                 LPTokenAddress = await this.uniWERC20Contract.getUnderlyingToken(collId);
                 break;
             default:
-                console.log("Unrecognized WERC20 contract.")
+                console.log("Unrecognized WERC20 contract: " + collToken + " its collId: " + collId._hex);
                 return false;
                 break;
         }
         this.werc20Info.insert({LPTokenAddress: LPTokenAddress, collId: collId._hex, WERC20ContractAddress: collToken});
+        console.log("Created werc20Info for LPToken: " + LPTokenAddress + " and collId " + collId._hex);
         return LPTokenAddress;
     }
 
     async getAndStorePosition(pID){
+        //TODO include werc20 contract '0x011535FD795fD28c749363E080662D62fBB456a7'
         let debts = await this.homoraBankContract.getPositionDebts(pID);
         let positionEntry = this.positions.findOne({'pID': pID});
         let position;
@@ -213,21 +215,24 @@ class Liquidator {
         let werc20Entry;
         if (positionEntry == null){
             position = await this.homoraBankContract.positions(pID);
+            //TODO it would be good to also search by the collToken here
             werc20Entry = this.werc20Info.findOne({'collId': position.collId._hex});
             if (werc20Entry == null){
                 LPTokenAddress =  await this.createWERC20InfoEntry(position.collId, position.collToken);
             } else {
                 LPTokenAddress = werc20Entry.LPTokenAddress;
             }
-            this.positions.insert({pID: pID, collateralSize: position.collateralSize, debts: debts, LPTokenAddress: LPTokenAddress});
+            this.positions.insert({pID: pID, collateralSize: position.collateralSize, debts: debts, LPTokenAddress: LPTokenAddress, collId: position.collId._hex, collToken: position.collToken});
+            console.log("Created position " + pID);
         } else {
             position = positionEntry;
-            werc20Entry = this.werc20Info.findOne({'LPTokenAddress': position.LPTokenAddress});
+            werc20Entry = this.werc20Info.findOne({'collId': position.collId});
             if (werc20Entry == null){
                 await this.createWERC20InfoEntry(position.collId, position.collToken);
             }
             position.debts = debts;
             this.positions.update(position);
+            console.log("Updated position " + pID);
         }
 
         //Information I need to store for each position: pid, collateralSize, LPTokenAddress, debts from getPositionDebts.
@@ -248,7 +253,12 @@ class Liquidator {
 
     }
 
-    
+    async updateAllPositions(){
+        let nextPositionId = await this.homoraBankContract.nextPositionId();
+        for (let pID = 1; pID < nextPositionId; pID++){
+            await this.getAndStorePosition(pID);
+        }
+    }
 
     async liquidatePosition(pID ){
         let position= await this.homoraBankContract.positions(pID);
@@ -265,16 +275,16 @@ class Liquidator {
 
         //This is for masterChefv1, there is no pid in that case, only the id.
         let masterChefID= position.collId;
-        let LPtokenAddress  = await this.wMasterChefContract.getUnderlyingToken(position.collId);
+        let LPTokenAddress  = await this.wMasterChefContract.getUnderlyingToken(position.collId);
 
-        let debtInfo = await this.getDebtTokensAndAmounts(LPtokenAddress,pID);
+        let debtInfo = await this.getDebtTokensAndAmounts(LPTokenAddress,pID);
 
         //A BigNumber of 2**112 because getETHPx returns the price ratio to ETH multiplied by it.
         //TODO this should be a class variable
         const oneTwelve = BigNumber.from(2**52).mul(BigNumber.from(2**52).mul(BigNumber.from(2**8)));
 
         // getETHPx returns WETH/token
-        let lpTokenPriceOT= await this.homoraBaseOracleContract.getETHPx(LPtokenAddress);
+        let lpTokenPriceOT= await this.homoraBaseOracleContract.getETHPx(LPTokenAddress);
 
         // console.log("collToken: " + position.collToken);
         // console.log("collId: " + position.collId.toString());
@@ -332,13 +342,13 @@ class Liquidator {
 
         //DEBUG
         // console.log("debtToken: " + debtInfo.debtToken);
-        // console.log("LPtokenAddress: " + LPtokenAddress);
+        // console.log("LPTokenAddress: " + LPTokenAddress);
         
         const deadline  = Math.floor(Date.now() / 1000) + 60 * 5 // 5 minutes from the current Unix time
         //position.collID is the id of the underlying LP token for WERC20 contracts for sushi, but for uni it uses the address of the LP token as the id.
         const data = ethers.utils.defaultAbiCoder.encode(
         ["uint", "uint", "uint",  "address", "uint", "uint", "uint", "uint", "uint", "address"],
-        [pID, masterChefID, bountyLP, LPtokenAddress, otherTokenOutLP, debtTokenOutLP, amountInSwap, amountOutSwap, deadline, debtInfo.otherTokenAddress]
+        [pID, masterChefID, bountyLP, LPTokenAddress, otherTokenOutLP, debtTokenOutLP, amountInSwap, amountOutSwap, deadline, debtInfo.otherTokenAddress]
         );
 
         try {
@@ -368,8 +378,8 @@ class Liquidator {
         this.bundleExecutorContract.doFlashloan(ALPHA_HOMORA_CTOKENS[0],10000,'');
     }
 
-    async getDebtTokensAndAmounts(LPtokenAddress , pID ) {
-        let LPToken = await ethers.getContractAt("contracts\\UniswapFlashQuery.sol:IUniswapV2Pair", LPtokenAddress);
+    async getDebtTokensAndAmounts(LPTokenAddress , pID ) {
+        let LPToken = await ethers.getContractAt("contracts\\UniswapFlashQuery.sol:IUniswapV2Pair", LPTokenAddress);
 
         let token0 = await LPToken.token0();
         let token1 = await LPToken.token1();
