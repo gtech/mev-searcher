@@ -13,6 +13,7 @@ const loki = require('lokijs');
 
 const ALPHA_HOMORA_BANK_ADDRESS  = "0xba5eBAf3fc1Fcca67147050Bf80462393814E54B";
 const WMASTERCHEF_ADDRESS  = "0xA2caEa05fF7B98f10Ad5ddc837F15905f33FEb60";
+const CRV_ADDRESS = "0xf1F32C8EEb06046d3cc3157B8F9f72B09D84ee5b";
 const UNISWAP_WERC20_ADDRESS  = "0x06799a1e4792001AA9114F0012b9650cA28059a3";
 const ALPHA_HOMORA_CORE_ORACLE  = "0x6be987c6d72e25F02f6f061F94417d83a6Aa13fC";
 const FLASHLOAN_FEE_NOMINATOR  = 10009;
@@ -49,13 +50,21 @@ class Liquidator {
     executorWallet;
     homoraBankContract;
     defaultingAccounts;
-    NAIVE_ACCOUNTS ;
+    NAIVE_ACCOUNTS;
+
     wMasterChefContract;
-    werc20Contract;
+    CRVContract
+    uniWERC20Contract;
+
     homoraOracleContract;
     homoraBaseOracleContract;
+
+    //Databases and collections
     database;
     positions;
+    werc20Info;
+    pricing;
+
 
 
     constructor(flashbotsProvider) {
@@ -75,6 +84,14 @@ class Liquidator {
         this.positions = this.database.getCollection("positions");
         if (this.positions === null) {
           this.positions = this.database.addCollection("positions");
+        }
+        this.pricing = this.database.getCollection("pricing");
+        if (this.pricing === null) {
+            this.pricing = this.database.addCollection("pricing");
+        }
+        this.werc20Info = this.database.getCollection("werc20Info");
+        if (this.werc20Info === null) {
+            this.werc20Info = this.database.addCollection("werc20Info");
         }
     }
 
@@ -102,7 +119,12 @@ class Liquidator {
         }
 
         this.homoraBankContract = await ethers.getContractAt("HomoraBank",ALPHA_HOMORA_BANK_ADDRESS);
+
         this.wMasterChefContract = await ethers.getContractAt("IWMasterChef2", WMASTERCHEF_ADDRESS);
+        this.CRVContract = await ethers.getContractAt("IWMasterChef2", CRV_ADDRESS);
+        this.uniWERC20Contract = await ethers.getContractAt("IWMasterChef2", UNISWAP_WERC20_ADDRESS);
+
+
         const HOMORA_ORACLE_ADDRESS = await this.homoraBankContract.oracle();
         this.homoraOracleContract = await ethers.getContractAt("ProxyOracle", HOMORA_ORACLE_ADDRESS);
         const BASE_ORACLE_ADDRESS = await this.homoraOracleContract.source();
@@ -162,17 +184,60 @@ class Liquidator {
         return borrowETHValue.div(collateralETHValue);
     }
 
-    async getAndStorePosition(pID ){
-        let position = await this.homoraBankContract.positions(pID);
+    async createWERC20InfoEntry(collId, collToken){
+        //TODO This function needs to make sure the entry doesn't exist already or the upper functino does.
+        let LPtokenAddress;
+        switch (collToken) {
+            case WMASTERCHEF_ADDRESS:
+                LPtokenAddress = await this.wMasterChefContract.getUnderlyingToken(collId);
+                break;
+            case CRV_ADDRESS:
+                LPtokenAddress = await this.CRVContract.getUnderlyingToken(collId);
+                break;
+            case UNISWAP_WERC20_ADDRESS:
+                LPtokenAddress = await this.uniWERC20Contract.getUnderlyingToken(collId);
+                break;
+            default:
+                console.log("Unrecognized WERC20 contract.")
+                return false;
+                break;
+        }
+        this.werc20Info.insert({LPtokenAddress: LPtokenAddress, collId: collId, WERC20ContractAddress: collToken});
+        return LPtokenAddress;
+    }
+
+    async getAndStorePosition(pID){
+        let debts = await this.homoraBankContract.getPositionDebts(pID);
+        let positionEntry = this.positions.findOne({'pID': pID});
+        let position;
+        if (positionEntry == null){
+            position = await this.homoraBankContract.positions(pID);
+            let LPTokenAddress =  await this.createWERC20InfoEntry(position.collId, position.collToken);
+            this.positions.insert({pID: pID, collateralSize: position.collateralSize, debts: debts, LPtokenAddress: LPTokenAddress});
+        } else {
+            position = positionEntry;
+            position.debts = debts;
+            this.positions.update(position);
+        }
+
         console.log(position);
 
-        //Last debtRatio, 
+        //So right now we have 3 databases: a pricing database for each token, a WERC20 to LPTokenAddress database for 
 
-        this.positions.insert({owner: position.owner, collateralSize: position.collateralSize, collId: position.collId, collToken: position.collToken, debtMap: position.debtMap, pID: pID});
-        var results = this.positions.where(function(obj) {
-            return (obj.owner == obj.owner);
-        });
-        console.log(results);
+        //TODO Information I need to store for each position: pid, collateralSize, LPTokenAddress, debts from getPositionDebts.
+        //TODO Create database of collId, LPTokenAddress (this acts as the index in order to know which WERC20ContractAddress is relevant to pricing and sending to the ExecutorContract to burn the LPToken), WERC20ContractAddress(aka collToken)
+ 
+        //TODO collateral value calculation in ETH: is in my liquidate function.
+        //TODO borrowed value calculation in ETH: Sum over all debtTokens
+        // tokenFactor = tokenFactors[token];
+        //              getETHPx(token).mul(amount).div(2**112).mul(tokenFactor.borrowFactor).div(10000);
+        //TODO sanity check for require(tokenFactor.liqIncentive != 0, 'bad underlying borrow');
+
+
+        //TODO Stuff I need to update every 1-5s: prices of debtTokens, prices of collateral Tokens.
+        //TODO So we'll just be running getETHPx on each token in order to update the prices.
+        //TODO add pricing database: [tokenAddress, lastPrice, tokenFactor]
+        // let tokenFactor = await this.homoraOracleContract.tokenFactors(token);
 
     }
 
