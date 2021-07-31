@@ -15,6 +15,7 @@ const ALPHA_HOMORA_BANK_ADDRESS  = "0xba5eBAf3fc1Fcca67147050Bf80462393814E54B";
 const WMASTERCHEF_ADDRESS  = "0xA2caEa05fF7B98f10Ad5ddc837F15905f33FEb60";
 const CRV_ADDRESS = "0xf1F32C8EEb06046d3cc3157B8F9f72B09D84ee5b";
 const UNISWAP_WERC20_ADDRESS  = "0x06799a1e4792001AA9114F0012b9650cA28059a3";
+const UNISWAP_WERC20_ADDRESS_ALT = "0x011535FD795fD28c749363E080662D62fBB456a7";
 const ALPHA_HOMORA_CORE_ORACLE  = "0x6be987c6d72e25F02f6f061F94417d83a6Aa13fC";
 const FLASHLOAN_FEE_NOMINATOR  = 10009;
 //INSUFFICENT_A or B means this number needs to decrease to accomodate the slippage
@@ -55,6 +56,7 @@ class Liquidator {
     wMasterChefContract;
     CRVContract
     uniWERC20Contract;
+    uniWERC20ContractAlt;
 
     homoraOracleContract;
     homoraBaseOracleContract;
@@ -123,6 +125,8 @@ class Liquidator {
         this.wMasterChefContract = await ethers.getContractAt("IWMasterChef2", WMASTERCHEF_ADDRESS);
         this.CRVContract = await ethers.getContractAt("IWMasterChef2", CRV_ADDRESS);
         this.uniWERC20Contract = await ethers.getContractAt("IWMasterChef2", UNISWAP_WERC20_ADDRESS);
+        this.uniWERC20ContractAlt = await ethers.getContractAt("IWMasterChef2", UNISWAP_WERC20_ADDRESS_ALT);
+
 
 
         const HOMORA_ORACLE_ADDRESS = await this.homoraBankContract.oracle();
@@ -184,51 +188,66 @@ class Liquidator {
         return borrowETHValue.div(collateralETHValue);
     }
 
-    async createWERC20InfoEntry(collId, collToken){
+    async createWERC20InfoEntry(collIdHex, collToken){
         let LPTokenAddress;
         switch (collToken) {
             case WMASTERCHEF_ADDRESS:
-                LPTokenAddress = await this.wMasterChefContract.getUnderlyingToken(collId);
+                LPTokenAddress = await this.wMasterChefContract.getUnderlyingToken(collIdHex);
                 break;
             case CRV_ADDRESS:
-                LPTokenAddress = await this.CRVContract.getUnderlyingToken(collId);
+                LPTokenAddress = await this.CRVContract.getUnderlyingToken(collIdHex);
                 break;
             case UNISWAP_WERC20_ADDRESS:
-                LPTokenAddress = await this.uniWERC20Contract.getUnderlyingToken(collId);
+                LPTokenAddress = await this.uniWERC20Contract.getUnderlyingToken(collIdHex);
+                break;
+            case UNISWAP_WERC20_ADDRESS_ALT:
+                LPTokenAddress = await this.uniWERC20ContractAlt.getUnderlyingToken(collIdHex);
                 break;
             default:
-                console.log("Unrecognized WERC20 contract: " + collToken + " its collId: " + collId._hex);
+                console.log("Unrecognized WERC20 contract: " + collToken + " its collId: " + collIdHex);
                 return false;
                 break;
         }
-        this.werc20Info.insert({LPTokenAddress: LPTokenAddress, collId: collId._hex, WERC20ContractAddress: collToken});
-        console.log("Created werc20Info for LPToken: " + LPTokenAddress + " and collId " + collId._hex);
+        
+        this.werc20Info.insert({LPTokenAddress: LPTokenAddress, collId: collIdHex, WERC20ContractAddress: collToken});
+        console.log("Created werc20Info for LPToken: " + LPTokenAddress + " and collId " + collIdHex);
         return LPTokenAddress;
     }
 
     async getAndStorePosition(pID){
-        //TODO include werc20 contract '0x011535FD795fD28c749363E080662D62fBB456a7'
         let debts = await this.homoraBankContract.getPositionDebts(pID);
         let positionEntry = this.positions.findOne({'pID': pID});
         let position;
         let LPTokenAddress;
         let werc20Entry;
+        let collIdHex;
+        
         if (positionEntry == null){
             position = await this.homoraBankContract.positions(pID);
+            if(position.collId._hex != undefined){
+                collIdHex = position.collId._hex;
+            } else {
+                collIdHex = position.collId;
+            }
             //TODO it would be good to also search by the collToken here
-            werc20Entry = this.werc20Info.findOne({'collId': position.collId._hex});
+            werc20Entry = this.werc20Info.findOne({'collId': collIdHex});
             if (werc20Entry == null){
-                LPTokenAddress =  await this.createWERC20InfoEntry(position.collId, position.collToken);
+                LPTokenAddress =  await this.createWERC20InfoEntry(collIdHex, position.collToken);
             } else {
                 LPTokenAddress = werc20Entry.LPTokenAddress;
             }
-            this.positions.insert({pID: pID, collateralSize: position.collateralSize, debts: debts, LPTokenAddress: LPTokenAddress, collId: position.collId._hex, collToken: position.collToken});
+            this.positions.insert({pID: pID, collateralSize: position.collateralSize, debts: debts, LPTokenAddress: LPTokenAddress, collId: collIdHex, collToken: position.collToken});
             console.log("Created position " + pID);
         } else {
             position = positionEntry;
-            werc20Entry = this.werc20Info.findOne({'collId': position.collId});
+            if(position.collId._hex != undefined){
+                collIdHex = position.collId._hex;
+            } else {
+                collIdHex = position.collId;
+            }
+            werc20Entry = this.werc20Info.findOne({'collId': collIdHex});
             if (werc20Entry == null){
-                await this.createWERC20InfoEntry(position.collId, position.collToken);
+                await this.createWERC20InfoEntry(collIdHex, position.collToken);
             }
             position.debts = debts;
             this.positions.update(position);
