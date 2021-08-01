@@ -272,6 +272,40 @@ class Liquidator {
 
     }
 
+    async updatePrices(){
+        // So Ideally I don't end up getting all debts and iterating through them for uniques every time I run this function. I should only have to do this when it has finished updating. That said, if it's fast enough, it doesn't really matter. Let's just go ahead and do it naively like this, and if it's slower than 500ms or so I'll change it.
+
+      
+        var positions = this.positions.where(function(obj) {
+            return (true);
+        });
+
+        for (let position of positions){
+            console.log("finding tokens in debts");
+            for (let debt of position.debts){
+                if (typeof(debt[0]) == 'string'){
+                    let token = this.pricing.findOne({'tokenAddress': debt[0]});
+                    if (token == null){
+                        let priceRatioOT = await this.homoraBaseOracleContract.getETHPx(debt[0]);
+                        let tokenFactor = await this.homoraOracleContract.tokenFactors(debt[0]);
+                        this.pricing.insert({tokenAddress: debt[0], priceRatioOT: priceRatioOT, tokenFactor: tokenFactor});
+                    }
+                }
+            }
+        }
+        
+        var tokens = this.pricing.where(function(obj) {
+            return (true);
+        });
+        
+        // tokenFactor = tokenFactors[token];
+        
+        // this.pricing.insert({tokenAddress: tokenAddress, priceRatioOT: priceRatioOT, tokenFactor: tokenFactor});
+
+        // this.homoraBaseOracleContract.getETHPx(debtInfo.otherTokenAddress)
+
+    }
+
     async updateAllPositions(){
         let nextPositionId = await this.homoraBankContract.nextPositionId();
         for (let pID = 1; pID < nextPositionId; pID++){
