@@ -101,11 +101,12 @@ describe("Liquidator", function(){
 
     const ethBalanceBeforeLiquidation = await liq.executorWallet.getBalance();
 
-    // await liq.updateAllPositions();
+    await liq.updateAllPositions();
 
-
-    await liq.updatePrices();
+    return
     
+    await liq.updatePrices();
+
     await liq.liquidatePosition(395);
 
     const ethBalanceAfterLiquidation = await liq.executorWallet.getBalance();

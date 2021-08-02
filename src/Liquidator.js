@@ -60,6 +60,7 @@ class Liquidator {
 
     homoraOracleContract;
     homoraBaseOracleContract;
+    alphaTierContract;
 
     //Databases and collections
     database;
@@ -130,7 +131,9 @@ class Liquidator {
 
 
         const HOMORA_ORACLE_ADDRESS = await this.homoraBankContract.oracle();
-        this.homoraOracleContract = await ethers.getContractAt("ProxyOracle", HOMORA_ORACLE_ADDRESS);
+        this.homoraOracleContract = await ethers.getContractAt("TierProxyOracle", HOMORA_ORACLE_ADDRESS);
+        const ALPHA_TIER_ADDRESS = await this.homoraBankContract.alphaTier();
+        this.alphaTierContract = await ethers.getContractAt("IAlphaStakingTier",ALPHA_TIER_ADDRESS);
         const BASE_ORACLE_ADDRESS = await this.homoraOracleContract.source();
         this.homoraBaseOracleContract = await ethers.getContractAt("IBaseOracle",BASE_ORACLE_ADDRESS);
         // this.homoraCoreOracleContract = await ethers.getContractAt("")
@@ -214,6 +217,28 @@ class Liquidator {
         return LPTokenAddress;
     }
 
+    async getUnderlyingRate(LPTokenAddress){
+        let infoEntry = this.werc20Info.findOne({'LPTokenAddress': LPTokenAddress});
+        switch (infoEntry.WERC20ContractAddress) {
+            case WMASTERCHEF_ADDRESS:
+                return await this.wMasterChefContract.getUnderlyingRate(infoEntry.collId);
+                break;
+            case CRV_ADDRESS:
+                return await this.CRVContract.getUnderlyingRate(infoEntry.collId);
+                break;
+            case UNISWAP_WERC20_ADDRESS:
+                return await this.uniWERC20Contract.getUnderlyingRate(infoEntry.collId);
+                break;
+            case UNISWAP_WERC20_ADDRESS_ALT:
+                return await this.uniWERC20ContractAlt.getUnderlyingRate(infoEntry.collId);
+                break;
+            default:
+                console.log("Unrecognized WERC20 contract when getting underlying rate for " + LPTokenAddress);
+                return false;
+                break;
+        }
+    }
+
     async getAndStorePosition(pID){
         let debts = await this.homoraBankContract.getPositionDebts(pID);
         let positionEntry = this.positions.findOne({'pID': pID});
@@ -236,7 +261,7 @@ class Liquidator {
             } else {
                 LPTokenAddress = werc20Entry.LPTokenAddress;
             }
-            this.positions.insert({pID: pID, collateralSize: position.collateralSize, debts: debts, LPTokenAddress: LPTokenAddress, collId: collIdHex, collToken: position.collToken});
+            this.positions.insert({pID: pID, collateralSize: position.collateralSize, debts: debts, LPTokenAddress: LPTokenAddress, collId: collIdHex, collToken: position.collToken, owner: position.owner});
             console.log("Created position " + pID);
         } else {
             position = positionEntry;
@@ -280,6 +305,7 @@ class Liquidator {
             return (true);
         });
 
+        //This populates all debt tokens into the pricing database.
         for (let position of positions){
             console.log("finding tokens in debts");
             for (let debt of position.debts){
@@ -287,12 +313,55 @@ class Liquidator {
                     let token = this.pricing.findOne({'tokenAddress': debt[0]});
                     if (token == null){
                         let priceRatioOT = await this.homoraBaseOracleContract.getETHPx(debt[0]);
-                        let tokenFactor = await this.homoraOracleContract.tokenFactors(debt[0]);
-                        this.pricing.insert({tokenAddress: debt[0], priceRatioOT: priceRatioOT, tokenFactor: tokenFactor});
+                        let tier = await this.alphaTierContract.getAlphaTier(position.owner);
+                        let tokenFactors = await this.homoraOracleContract.tierTokenFactors(debt[0],tier);
+                        let tokenFactor = tokenFactors.borrowFactor;
+                        this.pricing.insert({tokenAddress: debt[0], priceRatioOT: priceRatioOT, tokenFactor: tokenFactor, collateral: false, underlyingRate: BigNumber.from(0)});
                     }
                 }
             }
+            let LPTokenAddressEntry = this.pricing.findOne({'LPTokenAddress': position.LPTokenAddress});
+                if (LPTokenAddressEntry == null){
+                    let priceRatioOT = await this.homoraBaseOracleContract.getETHPx(position.LPTokenAddress);
+                    let tier = await this.alphaTierContract.getAlphaTier(position.owner);
+                    let tokenFactors = await this.homoraOracleContract.tierTokenFactors(debt[0],tier);
+                    let tokenFactor = tokenFactors.collateralFactor;
+                    //TODO underlyingRate
+                    let underlyingRate = this.getUnderlyingRate(LPTokenAddressEntry.LPTokenAddress);
+                    this.pricing.insert({tokenAddress: position.LPTokenAddress, priceRatioOT: priceRatioOT, tokenFactor: tokenFactor, collateral: true, underlyingRate: underlyingRate});
+                }
         }
+
+        // function asETHBorrow(
+        //     address token,
+        //     uint amount,
+        //     address owner
+        //   ) external view returns (uint) {
+        //     uint tier = alphaTier.getAlphaTier(owner);
+        //     uint borrFactor = tierTokenFactors[token][tier].borrowFactor;
+        //     require(liqIncentives[token] != 0, 'bad underlying borrow');
+        //     require(borrFactor < 50000, 'bad borr factor');
+        //     uint ethValue = source.getETHPx(token).mul(amount).div(2**112);
+        //     return ethValue.mul(borrFactor).div(10000);
+        //   }
+
+        // function asETHCollateral(
+        //     address token,
+        //     uint id,
+        //     uint amount,
+        //     address owner
+        //   ) external view returns (uint) {
+        //     require(whitelistERC1155[token], 'bad token');
+        //     address tokenUnderlying = IERC20Wrapper(token).getUnderlyingToken(id);
+        //     uint rateUnderlying = IERC20Wrapper(token).getUnderlyingRate(id);
+        //     uint amountUnderlying = amount.mul(rateUnderlying).div(2**112);
+        //     uint tier = alphaTier.getAlphaTier(owner);
+        //     uint collFactor = tierTokenFactors[tokenUnderlying][tier].collateralFactor;
+        //     require(liqIncentives[tokenUnderlying] != 0, 'bad underlying collateral');
+        //     require(collFactor != 0, 'bad coll factor');
+        //     uint ethValue = source.getETHPx(tokenUnderlying).mul(amountUnderlying).div(2**112);
+        //     return ethValue.mul(collFactor).div(10000);
+        //   }
         
         var tokens = this.pricing.where(function(obj) {
             return (true);
