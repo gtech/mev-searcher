@@ -103,8 +103,8 @@ describe("Liquidator", function(){
 
     await liq.updateAllPositions();
 
-    return
-    
+    // return
+
     await liq.updatePrices();
 
     await liq.liquidatePosition(395);

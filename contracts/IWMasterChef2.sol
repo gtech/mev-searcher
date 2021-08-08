@@ -126,6 +126,8 @@ abstract contract IWMasterChef2 {
 
     function getUnderlyingToken(uint id) external view virtual returns (address);
 
+    function getUnderlyingRate(uint id) external view virtual returns (uint);
+
     /// @notice Withdraw without caring about rewards. EMERGENCY ONLY.
     /// @param pid The index of the pool. See `poolInfo`.
     /// @param to Receiver of the LP tokens.

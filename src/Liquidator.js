@@ -67,6 +67,7 @@ class Liquidator {
     positions;
     werc20Info;
     pricing;
+    tokenFactors;
 
 
 
@@ -95,6 +96,10 @@ class Liquidator {
         this.werc20Info = this.database.getCollection("werc20Info");
         if (this.werc20Info === null) {
             this.werc20Info = this.database.addCollection("werc20Info");
+        }
+        this.tokenFactors = this.database.getCollection("tokenFactors");
+        if (this.tokenFactors === null) {
+            this.tokenFactors = this.database.addCollection("tokenFactors");
         }
     }
 
@@ -128,20 +133,15 @@ class Liquidator {
         this.uniWERC20Contract = await ethers.getContractAt("IWMasterChef2", UNISWAP_WERC20_ADDRESS);
         this.uniWERC20ContractAlt = await ethers.getContractAt("IWMasterChef2", UNISWAP_WERC20_ADDRESS_ALT);
 
-
-
         const HOMORA_ORACLE_ADDRESS = await this.homoraBankContract.oracle();
         this.homoraOracleContract = await ethers.getContractAt("TierProxyOracle", HOMORA_ORACLE_ADDRESS);
-        const ALPHA_TIER_ADDRESS = await this.homoraBankContract.alphaTier();
+        const ALPHA_TIER_ADDRESS = await this.homoraOracleContract.alphaTier();
         this.alphaTierContract = await ethers.getContractAt("IAlphaStakingTier",ALPHA_TIER_ADDRESS);
         const BASE_ORACLE_ADDRESS = await this.homoraOracleContract.source();
-        this.homoraBaseOracleContract = await ethers.getContractAt("IBaseOracle",BASE_ORACLE_ADDRESS);
-        // this.homoraCoreOracleContract = await ethers.getContractAt("")
+        this.homoraBaseOracleContract = await ethers.getContractAt("contracts\\TierProxyOracle.sol:IBaseOracle",BASE_ORACLE_ADDRESS);
     }
 
     async accrue(){
-        // let tokens : Array<string> = _.map(ALPHA_HOMORA_CTOKENS, (ctoken)=> {return ctoken.underlyingAddress})
-
         for (var token of BANK_TOKENS){
             await this.homoraBankContract.accrue(token).catch((err)=>{console.log(err);});
         }
@@ -168,7 +168,6 @@ class Liquidator {
             return (obj.owner == obj.owner);
         });
         console.log(results);
-
     }
 
     async findAccountValue(pID ) {
@@ -246,6 +245,7 @@ class Liquidator {
         let LPTokenAddress;
         let werc20Entry;
         let collIdHex;
+        let tier;
         
         if (positionEntry == null){
             position = await this.homoraBankContract.positions(pID);
@@ -261,7 +261,13 @@ class Liquidator {
             } else {
                 LPTokenAddress = werc20Entry.LPTokenAddress;
             }
-            this.positions.insert({pID: pID, collateralSize: position.collateralSize, debts: debts, LPTokenAddress: LPTokenAddress, collId: collIdHex, collToken: position.collToken, owner: position.owner});
+            try {
+                tier = await this.alphaTierContract.getAlphaTier(position.owner);      
+            } catch (error) {
+                console.log("Couldn't get tier " + error);
+                return false;
+            }
+            this.positions.insert({pID: pID, collateralSize: position.collateralSize, debts: debts, LPTokenAddress: LPTokenAddress, collId: collIdHex, collToken: position.collToken, owner: position.owner, tier: tier});
             console.log("Created position " + pID);
         } else {
             position = positionEntry;
@@ -274,6 +280,14 @@ class Liquidator {
             if (werc20Entry == null){
                 await this.createWERC20InfoEntry(collIdHex, position.collToken);
             }
+            try {
+                tier = await this.alphaTierContract.getAlphaTier(position.owner);      
+            } catch (error) {
+                console.log("Couldn't get tier, removing position " + position.pID + " " + error);
+                this.positions.remove(position);
+                return false;
+            }
+            position.tier = tier;
             position.debts = debts;
             this.positions.update(position);
             console.log("Updated position " + pID);
@@ -307,27 +321,27 @@ class Liquidator {
 
         //This populates all debt tokens into the pricing database.
         for (let position of positions){
-            console.log("finding tokens in debts");
             for (let debt of position.debts){
                 if (typeof(debt[0]) == 'string'){
                     let token = this.pricing.findOne({'tokenAddress': debt[0]});
                     if (token == null){
+                        console.log("finding tokens in debts for " + position.pID);
                         let priceRatioOT = await this.homoraBaseOracleContract.getETHPx(debt[0]);
-                        let tier = await this.alphaTierContract.getAlphaTier(position.owner);
-                        let tokenFactors = await this.homoraOracleContract.tierTokenFactors(debt[0],tier);
-                        let tokenFactor = tokenFactors.borrowFactor;
-                        this.pricing.insert({tokenAddress: debt[0], priceRatioOT: priceRatioOT, tokenFactor: tokenFactor, collateral: false, underlyingRate: BigNumber.from(0)});
+                        // let tier = await this.alphaTierContract.getAlphaTier(position.owner);
+                        // let tokenFactors = await this.homoraOracleContract.tierTokenFactors(debt[0],position.tier);
+                        // let tokenFactor = tokenFactors.borrowFactor;
+                        console.log("Inserting token " + debt[0]);
+                        this.pricing.insert({tokenAddress: debt[0], priceRatioOT: priceRatioOT, collateral: false, underlyingRate: BigNumber.from(0)});
                     }
                 }
             }
-            let LPTokenAddressEntry = this.pricing.findOne({'LPTokenAddress': position.LPTokenAddress});
+            let LPTokenAddressEntry = this.pricing.findOne({'tokenAddress': position.LPTokenAddress});
                 if (LPTokenAddressEntry == null){
                     let priceRatioOT = await this.homoraBaseOracleContract.getETHPx(position.LPTokenAddress);
-                    let tier = await this.alphaTierContract.getAlphaTier(position.owner);
-                    let tokenFactors = await this.homoraOracleContract.tierTokenFactors(debt[0],tier);
+                    let tokenFactors = await this.homoraOracleContract.tierTokenFactors(position.LPTokenAddress,position.tier);
                     let tokenFactor = tokenFactors.collateralFactor;
-                    //TODO underlyingRate
-                    let underlyingRate = this.getUnderlyingRate(LPTokenAddressEntry.LPTokenAddress);
+                    let underlyingRate = await this.getUnderlyingRate(position.LPTokenAddress);
+                    console.log("Inserting LPToken " + position.LPTokenAddress);
                     this.pricing.insert({tokenAddress: position.LPTokenAddress, priceRatioOT: priceRatioOT, tokenFactor: tokenFactor, collateral: true, underlyingRate: underlyingRate});
                 }
         }
@@ -373,6 +387,11 @@ class Liquidator {
 
         // this.homoraBaseOracleContract.getETHPx(debtInfo.otherTokenAddress)
 
+    }
+
+    getDebtValue(pID){
+        let positionEntry = this.positions.findOne({'pID': pID});
+        //Wait fuck does each owner have their own alphaTier for each individual position? That's fucking bonkers. So would would need to find that tier for each of their debts. The other question is that every owner may have different alphaTiers for every collateral. The question is, do those tiers change or are they static, and are they different... Okay no, they have one tier and it's according to the owner. Thank fuck. So we store the tier, let's see how these tiers get... We should check the tier on the update of all the positions. 
     }
 
     async updateAllPositions(){
