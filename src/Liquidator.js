@@ -67,7 +67,7 @@ class Liquidator {
     positions;
     werc20Info;
     pricing;
-    tokenFactors;
+    // tokenFactors;
 
 
 
@@ -97,10 +97,10 @@ class Liquidator {
         if (this.werc20Info === null) {
             this.werc20Info = this.database.addCollection("werc20Info");
         }
-        this.tokenFactors = this.database.getCollection("tokenFactors");
-        if (this.tokenFactors === null) {
-            this.tokenFactors = this.database.addCollection("tokenFactors");
-        }
+        // this.tokenFactors = this.database.getCollection("tokenFactors");
+        // if (this.tokenFactors === null) {
+        //     this.tokenFactors = this.database.addCollection("tokenFactors");
+        // }
     }
 
     async initialize(){
@@ -238,7 +238,13 @@ class Liquidator {
         }
     }
 
-    async getAndStorePosition(pID){
+    /**
+     * Stores a given position in the positions database, and initializes all its relevant debt and collateral tokens.
+     * @param {number} pID The possession ID
+     * @param {number} tierCount The number of alphaTiers.
+     * @returns {boolean} Whether or not the position was stored successfully.
+     */
+    async getAndStorePosition(pID,tierCount){
         let debts = await this.homoraBankContract.getPositionDebts(pID);
         let positionEntry = this.positions.findOne({'pID': pID});
         let position;
@@ -249,12 +255,12 @@ class Liquidator {
         
         if (positionEntry == null){
             position = await this.homoraBankContract.positions(pID);
+            
             if(position.collId._hex != undefined){
                 collIdHex = position.collId._hex;
             } else {
                 collIdHex = position.collId;
             }
-            //TODO it would be good to also search by the collToken here
             werc20Entry = this.werc20Info.findOne({'collId': collIdHex});
             if (werc20Entry == null){
                 LPTokenAddress =  await this.createWERC20InfoEntry(collIdHex, position.collToken);
@@ -267,9 +273,18 @@ class Liquidator {
                 console.log("Couldn't get tier " + error);
                 return false;
             }
+
+            //Initialize debt tokens and the collateral token in the pricing DB.
+            for (let debt of position.debts){
+                if (typeof(debt[0]) == 'string'){
+                    await this.initializeToken(debt[0],false,tierCount);
+                }
+            }
+            await this.initializeToken(LPTokenAddress,true,tierCount);
+
             this.positions.insert({pID: pID, collateralSize: position.collateralSize, debts: debts, LPTokenAddress: LPTokenAddress, collId: collIdHex, collToken: position.collToken, owner: position.owner, tier: tier});
             console.log("Created position " + pID);
-        } else {
+        } else {//If the position exists, update the the tier and update the debts. 
             position = positionEntry;
             if(position.collId._hex != undefined){
                 collIdHex = position.collId._hex;
@@ -292,60 +307,37 @@ class Liquidator {
             this.positions.update(position);
             console.log("Updated position " + pID);
         }
-
-        //Information I need to store for each position: pid, collateralSize, LPTokenAddress, debts from getPositionDebts.
+        return true;
 
         //database of collId, LPTokenAddress (this acts as the index in order to know which WERC20ContractAddress is relevant to pricing and sending to the ExecutorContract to burn the LPToken), WERC20ContractAddress(aka collToken)
  
         //TODO collateral value calculation in ETH: is in my liquidate function.
         //TODO borrowed value calculation in ETH: Sum over all debtTokens
-        // tokenFactor = tokenFactors[token];
-        //              getETHPx(token).mul(amount).div(2**112).mul(tokenFactor.borrowFactor).div(10000);
+        //TODO getETHPx(token).mul(amount).div(2**112).mul(tokenFactor.borrowFactor).div(10000);
         //TODO sanity check for require(tokenFactor.liqIncentive != 0, 'bad underlying borrow');
 
-
         //TODO Stuff I need to update every 1-5s: prices of debtTokens, prices of collateral Tokens.
-        //TODO So we'll just be running getETHPx on each token in order to update the prices.
-        //TODO add pricing database: [tokenAddress, lastPrice, tokenFactor]
-        // let tokenFactor = await this.homoraOracleContract.tokenFactors(token);
-
     }
 
+    /**
+     * Updates the pricing database with the latest prices of each token.
+     */
     async updatePrices(){
-        // So Ideally I don't end up getting all debts and iterating through them for uniques every time I run this function. I should only have to do this when it has finished updating. That said, if it's fast enough, it doesn't really matter. Let's just go ahead and do it naively like this, and if it's slower than 500ms or so I'll change it.
-
-      
-        var positions = this.positions.where(function(obj) {
-            return (true);
-        });
-
-        //This populates all debt tokens into the pricing database.
-        for (let position of positions){
-            for (let debt of position.debts){
-                if (typeof(debt[0]) == 'string'){
-                    let token = this.pricing.findOne({'tokenAddress': debt[0]});
-                    if (token == null){
-                        console.log("finding tokens in debts for " + position.pID);
-                        let priceRatioOT = await this.homoraBaseOracleContract.getETHPx(debt[0]);
-                        // let tier = await this.alphaTierContract.getAlphaTier(position.owner);
-                        // let tokenFactors = await this.homoraOracleContract.tierTokenFactors(debt[0],position.tier);
-                        // let tokenFactor = tokenFactors.borrowFactor;
-                        console.log("Inserting token " + debt[0]);
-                        this.pricing.insert({tokenAddress: debt[0], priceRatioOT: priceRatioOT, collateral: false, underlyingRate: BigNumber.from(0)});
-                    }
-                }
-            }
-            let LPTokenAddressEntry = this.pricing.findOne({'tokenAddress': position.LPTokenAddress});
-                if (LPTokenAddressEntry == null){
-                    let priceRatioOT = await this.homoraBaseOracleContract.getETHPx(position.LPTokenAddress);
-                    let tokenFactors = await this.homoraOracleContract.tierTokenFactors(position.LPTokenAddress,position.tier);
-                    let tokenFactor = tokenFactors.collateralFactor;
-                    let underlyingRate = await this.getUnderlyingRate(position.LPTokenAddress);
-                    console.log("Inserting LPToken " + position.LPTokenAddress);
-                    this.pricing.insert({tokenAddress: position.LPTokenAddress, priceRatioOT: priceRatioOT, tokenFactor: tokenFactor, collateral: true, underlyingRate: underlyingRate});
-                }
+        let tokenEntries;
+        try {
+            tokenEntries = this.pricing.where(function(obj) {
+                return (true);
+            });
+        } catch (error) {
+            console.log("Error getting all of tokens in the pricing DB " + error);
+            return false;
         }
-
+        for (let tokenEntry of tokenEntries){
+            let priceRatioOT = await this.homoraBaseOracleContract.getETHPx(tokenEntry.tokenAddress);
+            tokenEntry.priceRatioOT = priceRatioOT;
+            this.pricing.update(tokenEntry);
+        }
+        
         // function asETHBorrow(
         //     address token,
         //     uint amount,
@@ -389,16 +381,136 @@ class Liquidator {
 
     }
 
+    /**
+     * TODO, Returns the value of all debts in ETH for a given position.
+     * @param {number} pID Position ID
+     * @returns {BigNumber} The value in ETH of the position, probably * 2**112.
+     */
     getDebtValue(pID){
         let positionEntry = this.positions.findOne({'pID': pID});
-        //Wait fuck does each owner have their own alphaTier for each individual position? That's fucking bonkers. So would would need to find that tier for each of their debts. The other question is that every owner may have different alphaTiers for every collateral. The question is, do those tiers change or are they static, and are they different... Okay no, they have one tier and it's according to the owner. Thank fuck. So we store the tier, let's see how these tiers get... We should check the tier on the update of all the positions. 
     }
 
-    async updateAllPositions(){
-        let nextPositionId = await this.homoraBankContract.nextPositionId();
-        for (let pID = 1; pID < nextPositionId; pID++){
-            await this.getAndStorePosition(pID);
+    /**
+     * Grabs all the tokenFactors for a given token.
+     * @param {string} token Token to get the tokenFactors for.
+     * @param {*} tierCount How many tiers are in the alphaTier contract.
+     * @returns {Object} An array of each tier to the borrowFactor and collateralFactor in a dictionary.
+     */
+    async getTokenfactors(token,tierCount){
+        let tokenFactors = Array(tierCount);
+        for (let tier = 0; tier < tierCount; tier++){
+            let tokenFactorTuple = await this.homoraOracleContract.tierTokenFactors(token,tier);
+            tokenFactors[tier] = tokenFactorTuple;
         }
+        return tokenFactors;
+    }
+
+    /**
+     * Updates the tokenFactors in the pricing database.
+     */
+    async updateTokenFactors(){
+        let tierCount = await this.alphaTierContract.tierCount();
+        let tokenFactors = this.getTokenfactors();
+
+        // let tokenFactor = tokenFactors.collateralFactor;
+    }
+
+    /**
+     * This updates the pricing and position databases. This is meant to be run about once a day or less often because it is so time and resource intensive. It should take around 30 minutes to an hour based on current tests.
+     * @returns {boolean} Whether all positions were successfully updated.
+     */
+    async fullDatabasesUpdate(){
+        let flawlessUpdate = true;
+        let nextPositionId;
+        let tierCount;
+        try {
+            tierCount = await this.alphaTierContract.tierCount();
+        } catch (error) {
+            console.log("Problem getting tierCount " + error);
+            return false;
+        }
+        try {
+            nextPositionId = await this.homoraBankContract.nextPositionId();
+        } catch (error) {
+            console.log("Problem requesting nextPositionId from chain " + error);
+            return false;
+        }
+        //Update the positions database.
+        for (let pID = 1; pID < nextPositionId; pID++){
+            if (await this.getAndStorePosition(pID,tierCount) == false){
+                flawlessUpdate = false;
+            };
+        }
+        return flawlessUpdate;
+    }
+
+    /**
+     * Checks if a token is in the pricing DB, and if not, initializes it with the latest data.
+     * @param {string} tokenAddress The token address to be initialized.
+     * @param {boolean} isCollateral Whether it's a collateral token or debt token.
+     * @param {number} tierCount The number of current alphaTiers (5 at the time of writing);
+     * @returns Whether the token is in the DB.
+     */
+    async initializeToken(tokenAddress, isCollateral, tierCount){
+        let tokenEntry;
+        try {
+            tokenEntry = this.pricing.findOne({'tokenAddress': tokenAddress});     
+        } catch (error) {
+            console.log("Problem finding tokenEntry " + tokenAddress + " in pricing DB " + error);
+            return false;
+        }
+        if (tokenEntry == null){
+            let tokenFactors;
+            let priceRatioOT;
+            let underlyingRate;
+            try {
+                tokenFactors = await getTokenfactors(tokenAddress,tierCount);
+                priceRatioOT = await this.homoraBaseOracleContract.getETHPx(tokenAddress);
+                underlyingRate = await this.getUnderlyingRate(tokenAddress);
+                this.pricing.insert({tokenAddress: tokenAddress, priceRatioOT: priceRatioOT, tokenFactors: tokenFactors, collateral: isCollateral, underlyingRate: underlyingRate});
+            } catch (error) {
+                console.log("Problem requesting token chain data while initializing " + error);
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Creates any token entries in the pricing database that do not exist yet.
+     * Atomically updates all relevant data.
+     * @returns {boolean} Whether the function was successful in updating all the tokens from all positions.
+     */
+    async initializeAllTokens(){
+        //TODO Create database testing functions.
+
+        let tierCount;
+        try {
+            tierCount = await this.alphaTierContract.tierCount();
+        } catch (error) {
+            console.log("Problem getting tierCount " + error);
+            return false;
+        }
+        let positions;
+        try {
+            positions = this.positions.where(function(obj) {
+                return (true);
+            });
+        } catch (error) {
+            console.log("Error getting all of the positions in the DB while initializing all tokens" + error);
+            return false;
+        }
+        
+        //This populates all debt tokens into the pricing database.
+        for (let position of positions){
+            for (let debt of position.debts){
+                if (typeof(debt[0]) == 'string'){
+                    this.initializeToken(debt[0],false,tierCount);
+                }
+            }
+            this.initializeToken(position.LPTokenAddress,true,tierCount);                
+        }
+        return true;
     }
 
     async liquidatePosition(pID ){
@@ -410,7 +522,6 @@ class Liquidator {
             return false;
         }
 
-        //
         //This is for masterChefv2. The masterChefPid is the most significant 16 bits of the collId, stored in little endian.
         // let masterChefPid  = this.swap16(position.collId.toHexString().substr(0,6));
 
@@ -431,13 +542,11 @@ class Liquidator {
         // console.log("collId: " + position.collId.toString());
         // console.log("werc20ID: " + werc20ID);
 
-
         const colBountyCalculated= await this.homoraOracleContract.convertForLiquidation(debtInfo.debtToken, position.collToken, position.collId, debtInfo.debtAmount);
 
         const bountyLP= colBountyCalculated.gt(position.collateralSize) ? position.collateralSize : colBountyCalculated;
         //The value of the bounty in ETH. NoOT means that it doesn't have the oneTwelve term.
         const bountyLPvalueNoOT= bountyLP.mul(lpTokenPriceOT).div(oneTwelve);
-
 
         //OT means that it's still multiplied by oneTwelve
         let priceRatioOT;
