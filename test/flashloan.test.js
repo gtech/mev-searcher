@@ -99,16 +99,16 @@ describe("Liquidator", function(){
     await environment.initialize();
     liq = await environment.createLiquidator();
 
-    const ethBalanceBeforeLiquidation = await liq.executorWallet.getBalance();
+    liq.getDebtValue(272);
 
-    // await liq.updateAllPositions();
+    // await liq.getAndStorePosition(40,1);
 
-    // return
+    // await liq.fullDatabasesUpdate();
 
     await liq.updatePrices();
 
+    const ethBalanceBeforeLiquidation = await liq.executorWallet.getBalance();
     await liq.liquidatePosition(395);
-
     const ethBalanceAfterLiquidation = await liq.executorWallet.getBalance();
     const profit = ethBalanceAfterLiquidation.sub(ethBalanceBeforeLiquidation);
     console.log("We made this much ETH: " + formatEther(profit));

@@ -23,6 +23,8 @@ const LP_SLIPPAGE  = 991;
 //INSUFFICENT_OUTPUT_AMOUNT means this number needs to decrease to accomodate the slippage
 const SWAP_SLIPPAGE  = 990;
 const AAVE_LENDING_POOL_ADDRESS_PROVIDER  = "0xB53C1a33016B2DC2fF3653530bfF1848a515c8c5";
+const ONE_TWELVE = BigNumber.from(2**52).mul(BigNumber.from(2**52).mul(BigNumber.from(2**8)));
+
 // const HOMORA_ORACLE_ADDRESS  = "0x914C687FFdAB6E1B47a327E7E4C10e4a058e009d"; 
 
 // export interface DebtInfo {
@@ -67,9 +69,6 @@ class Liquidator {
     positions;
     werc20Info;
     pricing;
-    // tokenFactors;
-
-
 
     constructor(flashbotsProvider) {
         // this.executorWallet = executorWallet;        
@@ -107,14 +106,12 @@ class Liquidator {
         const [owner] = await ethers.getSigners();
         this.executorWallet = owner;
 
-
         this.database = new loki('liquidator.db', {
             autoload: true,
             autoloadCallback : () => this.databaseInitialize(),
             autosave: true, 
             autosaveInterval: 4000 //Four seconds
         });
-
 
         if (process.env.BUNDLE_EXECUTOR_ADDRESS  === undefined) {
             let FlashBotsMultiCall = await ethers.getContractFactory("FlashBotsMultiCall");
@@ -157,7 +154,6 @@ class Liquidator {
             await this.isAccountDefaulting(pID);
         }
     }
-
 
     async database_testing(){
         let position = await this.homoraBankContract.positions(457);
@@ -206,7 +202,7 @@ class Liquidator {
                 LPTokenAddress = await this.uniWERC20ContractAlt.getUnderlyingToken(collIdHex);
                 break;
             default:
-                console.log("Unrecognized WERC20 contract: " + collToken + " its collId: " + collIdHex);
+                console.log("ERROR: Unrecognized WERC20 contract: " + collToken + " its collId: " + collIdHex);
                 return false;
                 break;
         }
@@ -232,10 +228,15 @@ class Liquidator {
                 return await this.uniWERC20ContractAlt.getUnderlyingRate(infoEntry.collId);
                 break;
             default:
-                console.log("Unrecognized WERC20 contract when getting underlying rate for " + LPTokenAddress);
+                console.log("ERROR: Unrecognized WERC20 contract when getting underlying rate for " + LPTokenAddress);
                 return false;
                 break;
         }
+    }
+
+    async initializeWERC20Entry(collIdHex,collToken){
+        
+        
     }
 
     /**
@@ -250,65 +251,70 @@ class Liquidator {
         let position;
         let LPTokenAddress;
         let werc20Entry;
+        let werc20Entries;
         let collIdHex;
         let tier;
         
-        if (positionEntry == null){
-            position = await this.homoraBankContract.positions(pID);
+        //TODO Let's see if we can consolidate this code. I need to figure out what I want to update every time and what I only want to update when the posiiton is first being made. I also don't want to make duplicate entries so I should update when it exists in the DB and create when it doesn't. That could mean 
+        position = await this.homoraBankContract.positions(pID);
             
-            if(position.collId._hex != undefined){
-                collIdHex = position.collId._hex;
-            } else {
-                collIdHex = position.collId;
-            }
-            werc20Entry = this.werc20Info.findOne({'collId': collIdHex});
-            if (werc20Entry == null){
-                LPTokenAddress =  await this.createWERC20InfoEntry(collIdHex, position.collToken);
-            } else {
-                LPTokenAddress = werc20Entry.LPTokenAddress;
-            }
-            try {
-                tier = await this.alphaTierContract.getAlphaTier(position.owner);      
-            } catch (error) {
-                console.log("Couldn't get tier " + error);
-                return false;
-            }
+        //TODO This code is strange. I think this works because the collId entries are formated differently for different positions.
+        if(position.collId._hex != undefined){
+            collIdHex = position.collId._hex;
+        } else {
+            collIdHex = position.collId;
+        }
+        //Get a relevant werc20 entry for the given collateral token. If it doesn't exist, create it and get back the LPTokenAddress.
+        //TODO make sure this DB check works.
+        werc20Entries = this.werc20Info.where(function(info) {
+            return (info.collId == collIdHex && info.WERC20ContractAddress == position.collToken);
+        });
+        if (werc20Entries.length > 1){
+            console.log("ERROR: DB inconsistancy, multiple werc20Info instances of collId: " + collIdHex + " collToken: " + position.collToken + " on pID: " + pID);
+        } else if (werc20Entries.length == 0){
+            LPTokenAddress =  await this.createWERC20InfoEntry(collIdHex, position.collToken);
+        } else {
+            LPTokenAddress = werc20Entries[0].LPTokenAddress;
+        }
 
-            //Initialize debt tokens and the collateral token in the pricing DB.
-            for (let debt of position.debts){
-                if (typeof(debt[0]) == 'string'){
-                    await this.initializeToken(debt[0],false,tierCount);
-                }
+        //Get the owner's alphaTier.
+        try {
+            tier = await this.alphaTierContract.getAlphaTier(position.owner);      
+        } catch (error) {
+            console.log("ERROR: Couldn't get tier for position" + pID + " " + error);
+            if (positionEntry != null){
+                console.log("Removing position " + position.pID + ", " + error);
+                this.positions.remove(positionEntry);
             }
-            await this.initializeToken(LPTokenAddress,true,tierCount);
+            return false;
+        }
 
+        //Initialize debt tokens in the pricing DB. If the tokens already exist then they won't be initialized.
+        for (let tokenAddy of debts[0]){
+            if (typeof(tokenAddy) == 'string'){
+                await this.initializeToken(tokenAddy,false,tierCount);
+            }
+        }
+        // Initialize collateral token in the pricing DB.
+        await this.initializeToken(LPTokenAddress,true,tierCount);
+
+        if (positionEntry == null){
             this.positions.insert({pID: pID, collateralSize: position.collateralSize, debts: debts, LPTokenAddress: LPTokenAddress, collId: collIdHex, collToken: position.collToken, owner: position.owner, tier: tier});
             console.log("Created position " + pID);
-        } else {//If the position exists, update the the tier and update the debts. 
-            position = positionEntry;
-            if(position.collId._hex != undefined){
-                collIdHex = position.collId._hex;
-            } else {
-                collIdHex = position.collId;
-            }
-            werc20Entry = this.werc20Info.findOne({'collId': collIdHex});
-            if (werc20Entry == null){
-                await this.createWERC20InfoEntry(collIdHex, position.collToken);
-            }
-            try {
-                tier = await this.alphaTierContract.getAlphaTier(position.owner);      
-            } catch (error) {
-                console.log("Couldn't get tier, removing position " + position.pID + " " + error);
-                this.positions.remove(position);
-                return false;
-            }
-            position.tier = tier;
-            position.debts = debts;
-            this.positions.update(position);
+        } else {
+            positionEntry.collateralSize = position.collateralSize;
+            positionEntry.debts = debts;
+            positionEntry.LPTokenAddress = LPTokenAddress;
+            positionEntry.collIdHex = collIdHex;
+            positionEntry.collToken = position.collToken;
+            positionEntry.tier = tier;
+            positionEntry.owner = position.owner;
+            this.positions.update(positionEntry);
             console.log("Updated position " + pID);
         }
-        return true;
 
+        
+  
         //database of collId, LPTokenAddress (this acts as the index in order to know which WERC20ContractAddress is relevant to pricing and sending to the ExecutorContract to burn the LPToken), WERC20ContractAddress(aka collToken)
  
         //TODO collateral value calculation in ETH: is in my liquidate function.
@@ -329,7 +335,7 @@ class Liquidator {
                 return (true);
             });
         } catch (error) {
-            console.log("Error getting all of tokens in the pricing DB " + error);
+            console.log("ERROR: Getting all of tokens in the pricing DB while updating prices " + error);
             return false;
         }
         for (let tokenEntry of tokenEntries){
@@ -337,19 +343,9 @@ class Liquidator {
             tokenEntry.priceRatioOT = priceRatioOT;
             this.pricing.update(tokenEntry);
         }
+        return true;
         
-        // function asETHBorrow(
-        //     address token,
-        //     uint amount,
-        //     address owner
-        //   ) external view returns (uint) {
-        //     uint tier = alphaTier.getAlphaTier(owner);
-        //     uint borrFactor = tierTokenFactors[token][tier].borrowFactor;
-        //     require(liqIncentives[token] != 0, 'bad underlying borrow');
-        //     require(borrFactor < 50000, 'bad borr factor');
-        //     uint ethValue = source.getETHPx(token).mul(amount).div(2**112);
-        //     return ethValue.mul(borrFactor).div(10000);
-        //   }
+        
 
         // function asETHCollateral(
         //     address token,
@@ -368,26 +364,64 @@ class Liquidator {
         //     uint ethValue = source.getETHPx(tokenUnderlying).mul(amountUnderlying).div(2**112);
         //     return ethValue.mul(collFactor).div(10000);
         //   }
-        
-        var tokens = this.pricing.where(function(obj) {
-            return (true);
-        });
-        
-        // tokenFactor = tokenFactors[token];
-        
-        // this.pricing.insert({tokenAddress: tokenAddress, priceRatioOT: priceRatioOT, tokenFactor: tokenFactor});
-
-        // this.homoraBaseOracleContract.getETHPx(debtInfo.otherTokenAddress)
-
     }
 
     /**
      * TODO, Returns the value of all debts in ETH for a given position.
      * @param {number} pID Position ID
-     * @returns {BigNumber} The value in ETH of the position, probably * 2**112.
+     * @returns {BigNumber} The value in ETH of the position, probably * 2**112. or 0 if it's unsuccessful.
      */
     getDebtValue(pID){
-        let positionEntry = this.positions.findOne({'pID': pID});
+        // function asETHBorrow(
+        //     address token,
+        //     uint amount,
+        //     address owner
+        //   ) external view returns (uint) {
+        //     uint tier = alphaTier.getAlphaTier(owner);
+        //     uint borrFactor = tierTokenFactors[token][tier].borrowFactor;
+        //     require(liqIncentives[token] != 0, 'bad underlying borrow');
+        //     require(borrFactor < 50000, 'bad borr factor');
+        //     uint ethValue = source.getETHPx(token).mul(amount).div(2**112);
+        //     return ethValue.mul(borrFactor).div(10000);
+        //   }
+        let positionEntry;
+        try {
+            positionEntry = this.positions.findOne({'pID': pID});
+            if (positionEntry == null){
+                console.log("Problem getting position " + pID + "returning value of 0 for borrowed ETH " + errror);
+                return BigNumber.from(0);
+            }
+        } catch (error) {
+            console.log("Problem getting position " + pID + "returning value of 0 for borrowed ETH " + errror);
+            return BigNumber.from(0);
+        }
+        let tier = positionEntry.tier;
+        let debtValueTotal = BigNumber.from(0);
+        let debtTokens = positionEntry.debts[0];
+        let amounts = positionEntry.debts[1];
+        for (let tokenIndex = 0; tokenIndex < debtTokens.length; tokenIndex++) {
+            let tokenAddress = debtTokens[tokenIndex];
+            let debtAmount = BigNumber.from(amounts[tokenIndex].hex);
+            let tokenEntry = this.pricing.findOne({'tokenAddress': tokenAddress});
+
+            //The borrowFactor is the first index of the tokenFactors.
+            let borrowFactor = tokenEntry.tokenFactors[BigNumber.from(tier).toNumber()][0];
+            if (borrowFactor >= 50000){
+                console.log("ERROR: Invalid borrowfactor: " + borrowFactor + "for position: " + pID);
+                return BigNumber.from(0);
+            }
+            
+            //     uint ethValue = source.getETHPx(token).mul(amount).div(2**112);
+            //     return ethValue.mul(borrFactor).div(10000);
+            let price = BigNumber.from(tokenEntry.priceRatioOT.hex);
+            let value = price.mul(debtAmount).div(ONE_TWELVE).mul(borrowFactor).div(10000);
+            console.log(formatEther(value));
+            debtValueTotal = debtValueTotal.add(value);
+        }
+        //TODO Test to see if we're getting the value correct by actually calling the contract.
+        // this.homoraBaseOracleContract
+
+        return debtValueTotal;
     }
 
     /**
@@ -426,13 +460,13 @@ class Liquidator {
         try {
             tierCount = await this.alphaTierContract.tierCount();
         } catch (error) {
-            console.log("Problem getting tierCount " + error);
+            console.log("ERROR: Problem getting tierCount " + error);
             return false;
         }
         try {
             nextPositionId = await this.homoraBankContract.nextPositionId();
         } catch (error) {
-            console.log("Problem requesting nextPositionId from chain " + error);
+            console.log("ERROR: Problem requesting nextPositionId from chain " + error);
             return false;
         }
         //Update the positions database.
@@ -452,63 +486,39 @@ class Liquidator {
      * @returns Whether the token is in the DB.
      */
     async initializeToken(tokenAddress, isCollateral, tierCount){
+        let tokenEntries;
         let tokenEntry;
         try {
-            tokenEntry = this.pricing.findOne({'tokenAddress': tokenAddress});     
+            tokenEntries = this.pricing.where(function(info) {
+                return (info.tokenAddress == tokenAddress);
+            });
+            if (tokenEntries.length > 1){
+                console.log("ERROR: Multiple instances of token in DB: " + tokenEntries[0].tokenAddress + " aborting initialize token.");
+                return false;
+            }
         } catch (error) {
-            console.log("Problem finding tokenEntry " + tokenAddress + " in pricing DB " + error);
+            console.log("ERROR: Problem finding tokenEntry " + tokenAddress + " in pricing DB " + error);
             return false;
         }
-        if (tokenEntry == null){
+        if (tokenEntries.length == 0){
+            tokenEntry = tokenEntries[0];
             let tokenFactors;
             let priceRatioOT;
             let underlyingRate;
             try {
-                tokenFactors = await getTokenfactors(tokenAddress,tierCount);
+                tokenFactors = await this.getTokenfactors(tokenAddress,tierCount);
                 priceRatioOT = await this.homoraBaseOracleContract.getETHPx(tokenAddress);
-                underlyingRate = await this.getUnderlyingRate(tokenAddress);
+                if (isCollateral == true){
+                    underlyingRate = await this.getUnderlyingRate(tokenAddress);
+                } else {
+                    underlyingRate = BigNumber.from(0);
+                }
                 this.pricing.insert({tokenAddress: tokenAddress, priceRatioOT: priceRatioOT, tokenFactors: tokenFactors, collateral: isCollateral, underlyingRate: underlyingRate});
+                console.log("Initialized token " + tokenAddress);
             } catch (error) {
-                console.log("Problem requesting token chain data while initializing " + error);
+                console.log("ERROR: Problem requesting token chain data while initializing " + error);
                 return false;
             }
-        }
-        return true;
-    }
-
-    /**
-     * Creates any token entries in the pricing database that do not exist yet.
-     * Atomically updates all relevant data.
-     * @returns {boolean} Whether the function was successful in updating all the tokens from all positions.
-     */
-    async initializeAllTokens(){
-        //TODO Create database testing functions.
-
-        let tierCount;
-        try {
-            tierCount = await this.alphaTierContract.tierCount();
-        } catch (error) {
-            console.log("Problem getting tierCount " + error);
-            return false;
-        }
-        let positions;
-        try {
-            positions = this.positions.where(function(obj) {
-                return (true);
-            });
-        } catch (error) {
-            console.log("Error getting all of the positions in the DB while initializing all tokens" + error);
-            return false;
-        }
-        
-        //This populates all debt tokens into the pricing database.
-        for (let position of positions){
-            for (let debt of position.debts){
-                if (typeof(debt[0]) == 'string'){
-                    this.initializeToken(debt[0],false,tierCount);
-                }
-            }
-            this.initializeToken(position.LPTokenAddress,true,tierCount);                
         }
         return true;
     }
@@ -518,7 +528,7 @@ class Liquidator {
 
         //TODO implement other than sushiswap
         if (position.collToken != WMASTERCHEF_ADDRESS){
-            console.log("This is not a sushiswap address");
+            console.log("ERROR: This is not a sushiswap address");
             return false;
         }
 
@@ -533,7 +543,6 @@ class Liquidator {
 
         //A BigNumber of 2**112 because getETHPx returns the price ratio to ETH multiplied by it.
         //TODO this should be a class variable
-        const oneTwelve = BigNumber.from(2**52).mul(BigNumber.from(2**52).mul(BigNumber.from(2**8)));
 
         // getETHPx returns WETH/token
         let lpTokenPriceOT= await this.homoraBaseOracleContract.getETHPx(LPTokenAddress);
@@ -545,10 +554,10 @@ class Liquidator {
         const colBountyCalculated= await this.homoraOracleContract.convertForLiquidation(debtInfo.debtToken, position.collToken, position.collId, debtInfo.debtAmount);
 
         const bountyLP= colBountyCalculated.gt(position.collateralSize) ? position.collateralSize : colBountyCalculated;
-        //The value of the bounty in ETH. NoOT means that it doesn't have the oneTwelve term.
-        const bountyLPvalueNoOT= bountyLP.mul(lpTokenPriceOT).div(oneTwelve);
+        //The value of the bounty in ETH. NoOT means that it doesn't have the ONE_TWELVE term.
+        const bountyLPvalueNoOT= bountyLP.mul(lpTokenPriceOT).div(ONE_TWELVE);
 
-        //OT means that it's still multiplied by oneTwelve
+        //OT means that it's still multiplied by ONE_TWELVE
         let priceRatioOT;
         if (debtInfo.debtInWETH){
             priceRatioOT = await this.homoraBaseOracleContract.getETHPx(debtInfo.otherTokenAddress);
@@ -561,10 +570,10 @@ class Liquidator {
         
         if (debtInfo.debtInWETH){
             debtTokenOutLP = bountyLPvalueNoOT.div(2).mul(LP_SLIPPAGE).div(1000);
-            otherTokenOutLP = bountyLPvalueNoOT.mul(oneTwelve).div(2).div(priceRatioOT).mul(LP_SLIPPAGE).div(1000);//TODO Check the validity of all of the parameters that I send to the contract in the debugger, on two different accounts.
+            otherTokenOutLP = bountyLPvalueNoOT.mul(ONE_TWELVE).div(2).div(priceRatioOT).mul(LP_SLIPPAGE).div(1000);//TODO Check the validity of all of the parameters that I send to the contract in the debugger, on two different accounts.
         } else {
             otherTokenOutLP = bountyLPvalueNoOT.div(2).mul(LP_SLIPPAGE).div(1000);
-            debtTokenOutLP = bountyLPvalueNoOT.div(2).mul(oneTwelve).div(priceRatioOT).mul(LP_SLIPPAGE).div(1000);
+            debtTokenOutLP = bountyLPvalueNoOT.div(2).mul(ONE_TWELVE).div(priceRatioOT).mul(LP_SLIPPAGE).div(1000);
         }
 
         let amountInSwap;
@@ -575,7 +584,7 @@ class Liquidator {
             amountOutSwap = debtTokenOutLP.mul(SWAP_SLIPPAGE).div(1000);//5444444444
         } else {//If I borrow a token that isn't WETH, then only transfer enough to satisfy the flash-debt.
             amountOutSwap = debtInfo.debtAmount.mul(FLASHLOAN_FEE_NOMINATOR).div(10000).sub(debtTokenOutLP);
-            amountInSwap = amountOutSwap.mul(priceRatioOT).div(oneTwelve).mul(1000).div(SWAP_SLIPPAGE);
+            amountInSwap = amountOutSwap.mul(priceRatioOT).div(ONE_TWELVE).mul(1000).div(SWAP_SLIPPAGE);
         }
 
         // const slippageTolerance = new Percent('50', '10000') // 50 bips, or 0.50%
