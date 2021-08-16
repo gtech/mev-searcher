@@ -246,16 +246,15 @@ class Liquidator {
      * @returns {boolean} Whether or not the position was stored successfully.
      */
     async getAndStorePosition(pID,tierCount){
-        let debts = await this.homoraBankContract.getPositionDebts(pID);
-        let positionEntry = this.positions.findOne({'pID': pID});
         let position;
         let LPTokenAddress;
         let werc20Entry;
         let werc20Entries;
         let collIdHex;
         let tier;
-        
-        //TODO Let's see if we can consolidate this code. I need to figure out what I want to update every time and what I only want to update when the posiiton is first being made. I also don't want to make duplicate entries so I should update when it exists in the DB and create when it doesn't. That could mean 
+        let debts = await this.homoraBankContract.getPositionDebts(pID);
+        let positionEntry = this.positions.findOne({'pID': pID});
+
         position = await this.homoraBankContract.positions(pID);
             
         //TODO This code is strange. I think this works because the collId entries are formated differently for different positions.
@@ -313,8 +312,6 @@ class Liquidator {
             console.log("Updated position " + pID);
         }
 
-        
-  
         //database of collId, LPTokenAddress (this acts as the index in order to know which WERC20ContractAddress is relevant to pricing and sending to the ExecutorContract to burn the LPToken), WERC20ContractAddress(aka collToken)
  
         //TODO collateral value calculation in ETH: is in my liquidate function.
@@ -329,6 +326,7 @@ class Liquidator {
      * Updates the pricing database with the latest prices of each token.
      */
     async updatePrices(){
+        //TODO We could take in parameters of which tokens to update in case we're running into problems of efficiency by updating all prices.
         let tokenEntries;
         try {
             tokenEntries = this.pricing.where(function(obj) {
@@ -339,6 +337,7 @@ class Liquidator {
             return false;
         }
         for (let tokenEntry of tokenEntries){
+            //TODO try catch here. Put all chain and DB calls in try catch blocks.
             let priceRatioOT = await this.homoraBaseOracleContract.getETHPx(tokenEntry.tokenAddress);
             tokenEntry.priceRatioOT = priceRatioOT;
             this.pricing.update(tokenEntry);
@@ -415,11 +414,17 @@ class Liquidator {
             //     return ethValue.mul(borrFactor).div(10000);
             let price = BigNumber.from(tokenEntry.priceRatioOT.hex);
             let value = price.mul(debtAmount).div(ONE_TWELVE).mul(borrowFactor).div(10000);
-            console.log(formatEther(value));
+            
+            //DEBUG
+            // console.log(formatEther(value));
+            // console.log(formatEther(homoraValue));
+
             debtValueTotal = debtValueTotal.add(value);
         }
         //TODO Test to see if we're getting the value correct by actually calling the contract.
         // this.homoraBaseOracleContract
+
+
 
         return debtValueTotal;
     }
@@ -437,16 +442,6 @@ class Liquidator {
             tokenFactors[tier] = tokenFactorTuple;
         }
         return tokenFactors;
-    }
-
-    /**
-     * Updates the tokenFactors in the pricing database.
-     */
-    async updateTokenFactors(){
-        let tierCount = await this.alphaTierContract.tierCount();
-        let tokenFactors = this.getTokenfactors();
-
-        // let tokenFactor = tokenFactors.collateralFactor;
     }
 
     /**
@@ -487,7 +482,6 @@ class Liquidator {
      */
     async initializeToken(tokenAddress, isCollateral, tierCount){
         let tokenEntries;
-        let tokenEntry;
         try {
             tokenEntries = this.pricing.where(function(info) {
                 return (info.tokenAddress == tokenAddress);
@@ -501,7 +495,6 @@ class Liquidator {
             return false;
         }
         if (tokenEntries.length == 0){
-            tokenEntry = tokenEntries[0];
             let tokenFactors;
             let priceRatioOT;
             let underlyingRate;
@@ -523,7 +516,7 @@ class Liquidator {
         return true;
     }
 
-    async liquidatePosition(pID ){
+    async liquidatePosition(pID){
         let position= await this.homoraBankContract.positions(pID);
 
         //TODO implement other than sushiswap
@@ -542,8 +535,6 @@ class Liquidator {
         let debtInfo = await this.getDebtTokensAndAmounts(LPTokenAddress,pID);
 
         //A BigNumber of 2**112 because getETHPx returns the price ratio to ETH multiplied by it.
-        //TODO this should be a class variable
-
         // getETHPx returns WETH/token
         let lpTokenPriceOT= await this.homoraBaseOracleContract.getETHPx(LPTokenAddress);
 

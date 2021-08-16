@@ -101,6 +101,9 @@ describe("Liquidator", function(){
 
     liq.getDebtValue(272);
 
+    //TODO turn this into a test. By getting the information of the position using the pID from lio, then running this and comparing against the return value of getDebtValue.
+    // let homoraValue = await liq.homoraOracleContract.asETHBorrow(tokenAddress,debtAmount, positionEntry.owner);
+
     // await liq.getAndStorePosition(40,1);
 
     // await liq.fullDatabasesUpdate();
