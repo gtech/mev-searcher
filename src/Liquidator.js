@@ -343,26 +343,6 @@ class Liquidator {
             this.pricing.update(tokenEntry);
         }
         return true;
-        
-        
-
-        // function asETHCollateral(
-        //     address token,
-        //     uint id,
-        //     uint amount,
-        //     address owner
-        //   ) external view returns (uint) {
-        //     require(whitelistERC1155[token], 'bad token');
-        //     address tokenUnderlying = IERC20Wrapper(token).getUnderlyingToken(id);
-        //     uint rateUnderlying = IERC20Wrapper(token).getUnderlyingRate(id);
-        //     uint amountUnderlying = amount.mul(rateUnderlying).div(2**112);
-        //     uint tier = alphaTier.getAlphaTier(owner);
-        //     uint collFactor = tierTokenFactors[tokenUnderlying][tier].collateralFactor;
-        //     require(liqIncentives[tokenUnderlying] != 0, 'bad underlying collateral');
-        //     require(collFactor != 0, 'bad coll factor');
-        //     uint ethValue = source.getETHPx(tokenUnderlying).mul(amountUnderlying).div(2**112);
-        //     return ethValue.mul(collFactor).div(10000);
-        //   }
     }
 
     /**
@@ -427,6 +407,57 @@ class Liquidator {
 
 
         return debtValueTotal;
+    }
+
+    /**
+     * 
+     * @param {number} pID 
+     * @returns {BigNumber} The value in eth of the collateral.
+     */
+    getCollateralValue(pID){
+        // function asETHCollateral(
+        //     address token,
+        //     uint id,
+        //     uint amount,
+        //     address owner
+        //   ) external view returns (uint) {
+        //     require(whitelistERC1155[token], 'bad token');
+        //     address tokenUnderlying = IERC20Wrapper(token).getUnderlyingToken(id);
+        //     uint rateUnderlying = IERC20Wrapper(token).getUnderlyingRate(id);
+        //     uint amountUnderlying = amount.mul(rateUnderlying).div(2**112);
+        //     uint tier = alphaTier.getAlphaTier(owner);
+        //     uint collFactor = tierTokenFactors[tokenUnderlying][tier].collateralFactor;
+        //     require(liqIncentives[tokenUnderlying] != 0, 'bad underlying collateral');
+        //     require(collFactor != 0, 'bad coll factor');
+        //     uint ethValue = source.getETHPx(tokenUnderlying).mul(amountUnderlying).div(2**112);
+        //     return ethValue.mul(collFactor).div(10000);
+        //   }
+        let collateralValueTotal = BigNumber.from(0);
+        let positionEntry;
+        //TODO create this check.
+        //require(whitelistERC1155[token], 'bad token');
+        try {
+            positionEntry = this.positions.findOne({'pID': pID});
+            if (positionEntry == null){
+                console.log("Problem getting position " + pID + "returning value of 0 for borrowed ETH " + errror);
+                return BigNumber.from(0);
+            }
+        } catch (error) {
+            console.log("Problem getting position " + pID + "returning value of 0 for borrowed ETH " + errror);
+            return BigNumber.from(0);
+        }
+        let underlyingRate = positionEntry.underlyingRate;
+        let tier = positionEntry.tier;
+        //TODO This function is in progress.
+        let borrowFactor = tokenEntry.tokenFactors[BigNumber.from(tier).toNumber()][0];
+
+
+
+        let debtValueTotal = BigNumber.from(0);
+        let debtTokens = positionEntry.debts[0];
+        let amounts = positionEntry.debts[1];
+
+        return collateralValueTotal;
     }
 
     /**
