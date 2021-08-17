@@ -99,10 +99,18 @@ describe("Liquidator", function(){
     await environment.initialize();
     liq = await environment.createLiquidator();
 
-    liq.getDebtValue(272);
+    let a = await liq.getCollateralValue(2256);
+    let b = await liq.getDebtValue(2256);
+
+    console.log(formatEther(a));
+    console.log(formatEther(b));
 
     //TODO turn this into a test. By getting the information of the position using the pID from lio, then running this and comparing against the return value of getDebtValue.
     // let homoraValue = await liq.homoraOracleContract.asETHBorrow(tokenAddress,debtAmount, positionEntry.owner);
+
+    //TODO Test for getCollateralValue
+    // let homoraValue = await this.homoraOracleContract.asETHCollateral(positionEntry.collToken, positionEntry.collId, positionEntry.collateralSize, positionEntry.owner);
+
 
     // await liq.getAndStorePosition(40,1);
 

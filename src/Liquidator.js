@@ -367,11 +367,11 @@ class Liquidator {
         try {
             positionEntry = this.positions.findOne({'pID': pID});
             if (positionEntry == null){
-                console.log("Problem getting position " + pID + "returning value of 0 for borrowed ETH " + errror);
+                console.log("Problem getting position " + pID + "returning value of 0 for borrowed ETH " + error);
                 return BigNumber.from(0);
             }
         } catch (error) {
-            console.log("Problem getting position " + pID + "returning value of 0 for borrowed ETH " + errror);
+            console.log("Problem getting position " + pID + "returning value of 0 for borrowed ETH " + error);
             return BigNumber.from(0);
         }
         let tier = positionEntry.tier;
@@ -401,11 +401,6 @@ class Liquidator {
 
             debtValueTotal = debtValueTotal.add(value);
         }
-        //TODO Test to see if we're getting the value correct by actually calling the contract.
-        // this.homoraBaseOracleContract
-
-
-
         return debtValueTotal;
     }
 
@@ -414,7 +409,7 @@ class Liquidator {
      * @param {number} pID 
      * @returns {BigNumber} The value in eth of the collateral.
      */
-    getCollateralValue(pID){
+    async getCollateralValue(pID){
         // function asETHCollateral(
         //     address token,
         //     uint id,
@@ -432,31 +427,37 @@ class Liquidator {
         //     uint ethValue = source.getETHPx(tokenUnderlying).mul(amountUnderlying).div(2**112);
         //     return ethValue.mul(collFactor).div(10000);
         //   }
-        let collateralValueTotal = BigNumber.from(0);
         let positionEntry;
         //TODO create this check.
         //require(whitelistERC1155[token], 'bad token');
         try {
             positionEntry = this.positions.findOne({'pID': pID});
             if (positionEntry == null){
-                console.log("Problem getting position " + pID + "returning value of 0 for borrowed ETH " + errror);
+                console.log("Problem getting position " + pID + " returning value of 0 for borrowed ETH " + error);
                 return BigNumber.from(0);
             }
         } catch (error) {
-            console.log("Problem getting position " + pID + "returning value of 0 for borrowed ETH " + errror);
+            console.log("Problem getting position " + pID + " returning value of 0 for borrowed ETH " + error);
             return BigNumber.from(0);
         }
-        let underlyingRate = positionEntry.underlyingRate;
+        let tokenEntry = this.pricing.findOne({'tokenAddress': positionEntry.LPTokenAddress});
+        let underlyingRate = tokenEntry.underlyingRate;
+        let amountUnderlying = BigNumber.from(positionEntry.collateralSize.hex).mul(underlyingRate).div(ONE_TWELVE);
         let tier = positionEntry.tier;
-        //TODO This function is in progress.
-        let borrowFactor = tokenEntry.tokenFactors[BigNumber.from(tier).toNumber()][0];
+        let collateralFactor = tokenEntry.tokenFactors[BigNumber.from(tier).toNumber()][1];
 
+        //TODO Create this check.
+        //     require(liqIncentives[tokenUnderlying] != 0, 'bad underlying collateral');
 
+        //TODO
+        //     require(collFactor != 0, 'bad coll factor');
 
-        let debtValueTotal = BigNumber.from(0);
-        let debtTokens = positionEntry.debts[0];
-        let amounts = positionEntry.debts[1];
+        let collateralValueTotal =  BigNumber.from(tokenEntry.priceRatioOT.hex).mul(amountUnderlying).mul(collateralFactor).div(ONE_TWELVE).div(10000);
+         //DEBUG
+        // console.log(formatEther(collateralValueTotal));
+        // console.log(formatEther(homoraValue));
 
+        //TODO This seems to be working but we're not using underlyingrate.
         return collateralValueTotal;
     }
 
