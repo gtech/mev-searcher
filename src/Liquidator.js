@@ -24,7 +24,7 @@ const LP_SLIPPAGE  = 991;
 const SWAP_SLIPPAGE  = 990;
 const AAVE_LENDING_POOL_ADDRESS_PROVIDER  = "0xB53C1a33016B2DC2fF3653530bfF1848a515c8c5";
 const ONE_TWELVE = BigNumber.from(2**52).mul(BigNumber.from(2**52).mul(BigNumber.from(2**8)));
-
+let ethPrice = 3038;
 // const HOMORA_ORACLE_ADDRESS  = "0x914C687FFdAB6E1B47a327E7E4C10e4a058e009d"; 
 
 // export interface DebtInfo {
@@ -409,7 +409,7 @@ class Liquidator {
      * @param {number} pID 
      * @returns {BigNumber} The value in eth of the collateral.
      */
-    async getCollateralValue(pID){
+    getCollateralValue(pID){
         // function asETHCollateral(
         //     address token,
         //     uint id,
@@ -551,7 +551,7 @@ class Liquidator {
     async liquidatePosition(pID){
         let position= await this.homoraBankContract.positions(pID);
 
-        //TODO implement other than sushiswap
+        //TODO This check needs to be removed.
         if (position.collToken != WMASTERCHEF_ADDRESS){
             console.log("ERROR: This is not a sushiswap address");
             return false;
@@ -701,7 +701,7 @@ class Liquidator {
     //     return banks;
     // }
 
-    async isAccountDefaulting(pID) {
+    async isAccountDefaultingHomora(pID) {
         let collateralETHValue= await this.homoraBankContract.getCollateralETHValue(pID).catch((err)=>{console.log(err);})
         let borrowETHValue= await this.homoraBankContract.getBorrowETHValue(pID).catch((err)=>{console.log(err);})
         // console.log(pID)
@@ -718,6 +718,45 @@ class Liquidator {
             return true;
         }
         return false;
+    }
+
+    findAllDefaultingPositions(){
+        let positionEntries = this.positions.where(function(obj) {
+            return (obj.owner == obj.owner);
+        });
+
+        let defaultingPositions = Array();
+        for (let positionEntry of positionEntries) {
+            if(this.isAccountDefaulting(position.pID)){
+                defaultingPositions.push(positionEntry);
+            }
+        }
+        return defaultingPositions;
+    }
+
+    /**
+     * Calculates the current value of the bounty for all liquidations this block. This is used to trigger a free for all for liquidating positions. We don't want to expose that we have liquidation code until we can make hundreds of thousands or millions of dollars. It possible that one person screws up. We should do a check that at least $100,000 is up for grabs and at least two positions are offering over $50,000. This means that there is a collapse currently happening. TODO the other way to do this is monitor price of tether but that's a little more unreliable.
+     * @param {Array<positionEntries>} defaultingPositions 
+     * @returns {number} The value of the bounty for all positions I can liquidate in this moment.
+     */
+    currentBountyForLiquidations(defaultingPositions){
+      let cumulativeBountyValue = 0;
+      for (const position of defaultingPositions) {
+          let bountyValue = parseInt(formatEther(this.getCollateralValue(position.pID).mul(ethPrice)).split('.')[0]) * 0.05;
+          //TODO Store the price of ethereum as a global variable and update it once a day in the updateAllDB function.
+          cumulativeBountyValue += bountyValue;
+      }
+      return cumulativeBountyValue;
+    }
+
+
+    /**
+     * Returns whethen a given position is in default.
+     * @param {number} pID Position ID
+     * @returns {boolean} Whether the position is in default.
+     */
+    isAccountDefaulting(pID){
+        return (getCollateralValue(pID) < this.getDebtValue(pID));
     }
 
     async testNaiveAccounts(){

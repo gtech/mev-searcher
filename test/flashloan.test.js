@@ -99,8 +99,9 @@ describe("Liquidator", function(){
     await environment.initialize();
     liq = await environment.createLiquidator();
 
-    let a = await liq.getCollateralValue(2256);
-    let b = await liq.getDebtValue(2256);
+    console.log("test");
+    let a = liq.getCollateralValue(2256);
+    let b = liq.getDebtValue(2256);
 
     console.log(formatEther(a));
     console.log(formatEther(b));
