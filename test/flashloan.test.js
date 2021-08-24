@@ -99,12 +99,12 @@ describe("Liquidator", function(){
     await environment.initialize();
     liq = await environment.createLiquidator();
 
-    console.log("test");
-    let a = liq.getCollateralValue(2256);
-    let b = liq.getDebtValue(2256);
+    // console.log("test");
+    // let a = liq.getCollateralValue(2256);
+    // let b = liq.getDebtValue(2256);
 
-    console.log(formatEther(a));
-    console.log(formatEther(b));
+    // console.log(formatEther(a));
+    // console.log(formatEther(b));
 
     //TODO turn this into a test. By getting the information of the position using the pID from lio, then running this and comparing against the return value of getDebtValue.
     // let homoraValue = await liq.homoraOracleContract.asETHBorrow(tokenAddress,debtAmount, positionEntry.owner);
@@ -113,21 +113,24 @@ describe("Liquidator", function(){
     // let homoraValue = await this.homoraOracleContract.asETHCollateral(positionEntry.collToken, positionEntry.collId, positionEntry.collateralSize, positionEntry.owner);
 
 
-    // await liq.getAndStorePosition(40,1);
+    // let tierCount = await liq.alphaTierContract.tierCount();
 
     // await liq.fullDatabasesUpdate();
+
+    await liq.getAndStorePosition(289,1);
+
+    // await historicalWalk(environment,liq, 2387);
+
 
     await liq.updatePrices();
 
     const ethBalanceBeforeLiquidation = await liq.executorWallet.getBalance();
-    await liq.liquidatePosition(395);
+    await liq.liquidatePosition(289);
     const ethBalanceAfterLiquidation = await liq.executorWallet.getBalance();
     const profit = ethBalanceAfterLiquidation.sub(ethBalanceBeforeLiquidation);
     console.log("We made this much ETH: " + formatEther(profit));
     // expect(profit.gt(0.2)).to.be.true();
 
-    //TODO We gotta find all of these.
-    
     // await historicalWalk(environment,liq);
     // for (const pID of liq.NAIVE_ACCOUNTS ){
     //   console.log(pID);
@@ -147,18 +150,28 @@ describe("Liquidator", function(){
   })
 });
 
-async function historicalWalk(environment, liq ){
-  let accountNum = 456;
-
-    let block = 12603506;
+async function historicalWalk(environment, liq, accountNum){
+    let block = 13080000;
     let day = 0;
+    let a;
+    let b;
 
     while(true){
-      let difference = formatEther( await liq.findAccountValue(accountNum));
-      console.log("Block " + block + ", " + difference + " Ether til liq, day " + day);
-      block+=2000;
-      day++;
-      environment.forkBlock(block);
+      // let difference = formatEther( await liq.findAccountValue(accountNum));
+      if (liq.isAccountDefaulting(accountNum)){
+        console.log("Account " + accountNum + " is in default on block " + block);
+      }
+      await liq.updatePrices();
+      if (block % 10 == 0){
+        a = formatEther(liq.getCollateralValue(accountNum));
+        b = formatEther(liq.getDebtValue(accountNum));
+        console.log("Block " + block + ", Ether til liq, day " + day + " " + a + " " + b);
+        // console.log("collateral: " + a + " debt: " + b);
+      }
+      block+=5;
+      // day++;
+      //TODO This doesn't seem to work.
+      // environment.forkBlock(block);
     }
 }
 

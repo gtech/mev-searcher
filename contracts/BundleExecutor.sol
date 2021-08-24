@@ -46,6 +46,7 @@ contract FlashBotsMultiCall  is FlashLoanReceiverBase, ERC1155Holder  {
     address payable private immutable executor;
     IWETH private constant WETH = IWETH(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2); //Mainnet
     IBank private constant BANK = IBank(0xba5eBAf3fc1Fcca67147050Bf80462393814E54B);
+    uint private minerPercent = 5;
     IWMasterChef private constant WMASTERCHEF = IWMasterChef(0xA2caEa05fF7B98f10Ad5ddc837F15905f33FEb60);
     // IWMasterChef private constant WERC20_UNI = IWMasterChef(0x06799a1e4792001AA9114F0012b9650cA28059a3);
     IUniswapV2Router02 private constant UNISWAPROUTER = IUniswapV2Router02(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D); 
@@ -91,6 +92,10 @@ contract FlashBotsMultiCall  is FlashLoanReceiverBase, ERC1155Holder  {
     
 
     receive() external payable {
+    }
+
+    function setMinerPercentage(uint percentage) onlyOwner external{
+        minerPercent = percentage;
     }
 
 
@@ -140,8 +145,6 @@ contract FlashBotsMultiCall  is FlashLoanReceiverBase, ERC1155Holder  {
         uint amount = amounts[0];
         address underlying = assets[0];
 
-        
-        
         // {
         //     uint currentBalance = IERC20(underlying).balanceOf(initiator);
         //     require(currentBalance >= amount, "Invalid balance, was the flashLoan successful?");
@@ -199,7 +202,7 @@ contract FlashBotsMultiCall  is FlashLoanReceiverBase, ERC1155Holder  {
         //     console.logUint(actualLPBalance);
         // }
 
-        //TODO Okay it looks like this burn function is slightly different for uni or sushi. For sushi it's a uint and for uni it's an address. We also need a different address lower down here. So there's a major split in functionality here. Again, we have the option of hard coding this stuff and making a branch or we can try to branch on types or something. Is it even worth implementing this for uni? Should we refactor this into other functions. No, looking at alpha homora it's pointless to support anything but sushiswap. CRV and uni are all stables which won't move enough to be liquidated. So... we have to roll back a lot of code. Good thing we hav e
+        //TODO Okay it looks like this burn function is slightly different for uni or sushi. For sushi it's a uint and for uni it's an address. We also need a different address lower down here. So there's a major split in functionality here.
         WMASTERCHEF.burn(flashInfo.masterChefID,flashInfo.LPBounty);
 
         //DEBUG
@@ -267,7 +270,15 @@ contract FlashBotsMultiCall  is FlashLoanReceiverBase, ERC1155Holder  {
         //     console.log("owed: ");
         //     console.logUint(amountOwing);
         // }
-        
+
+        //TODO Test this. We can use WAAAAAY less. Probably anyway.
+        // if (this.minerPercent != 0){
+        //     block.coinbase.transfer(
+        //     div(
+        //         mul(address(this.balance),this.minerPercent)
+        //     ,100)
+        //     );
+        // }
         executor.transfer(address(this).balance);
         return true;
     }

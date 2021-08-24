@@ -5,7 +5,7 @@ require("@nomiclabs/hardhat-waffle");
 const { FlashbotsBundleProvider } = require("@flashbots/ethers-provider-bundle");
 const { SignerWithAddress } = require("@nomiclabs/hardhat-ethers/signers");
 const { ALPHA_HOMORA_CTOKENS, BANK_TOKENS, WETH_ADDRESS, TOKENS_TO_CTOKENS } = require("./addresses.js");
-const { formatEther } = require("@ethersproject/units");
+const { formatEther, formatUnits } = require("@ethersproject/units");
 const { ChainId, Token, WETH, Fetcher, Trade, Route, TokenAmount, TradeType, Percent } = require('@uniswap/sdk')
 const { on } = require("events");
 const { hrtime } = require("process");
@@ -24,7 +24,10 @@ const LP_SLIPPAGE  = 991;
 const SWAP_SLIPPAGE  = 990;
 const AAVE_LENDING_POOL_ADDRESS_PROVIDER  = "0xB53C1a33016B2DC2fF3653530bfF1848a515c8c5";
 const ONE_TWELVE = BigNumber.from(2**52).mul(BigNumber.from(2**52).mul(BigNumber.from(2**8)));
-let ethPrice = 3038;
+const THRESHHOLD_FOR_LIQUIDATION = 10000; //Using USD
+const THRESHHOLD_FOR_FREE_FOR_ALL = 1000000; //Using USD
+let ethPrice = 3038; //TODO These probably should be class vars instead of globals.
+let freeForAll = false; //This flips when we think that we have hit the black swan.
 // const HOMORA_ORACLE_ADDRESS  = "0x914C687FFdAB6E1B47a327E7E4C10e4a058e009d"; 
 
 // export interface DebtInfo {
@@ -131,9 +134,15 @@ class Liquidator {
         this.uniWERC20ContractAlt = await ethers.getContractAt("IWMasterChef2", UNISWAP_WERC20_ADDRESS_ALT);
 
         const HOMORA_ORACLE_ADDRESS = await this.homoraBankContract.oracle();
+        //TODO Sometimes there aren't tiers...
         this.homoraOracleContract = await ethers.getContractAt("TierProxyOracle", HOMORA_ORACLE_ADDRESS);
-        const ALPHA_TIER_ADDRESS = await this.homoraOracleContract.alphaTier();
-        this.alphaTierContract = await ethers.getContractAt("IAlphaStakingTier",ALPHA_TIER_ADDRESS);
+        try {
+            let ALPHA_TIER_ADDRESS = await this.homoraOracleContract.alphaTier();
+            this.alphaTierContract = await ethers.getContractAt("IAlphaStakingTier",ALPHA_TIER_ADDRESS);
+        } catch (error) {
+            console.log("There is no alpha tier yet." + error);
+        }
+        
         const BASE_ORACLE_ADDRESS = await this.homoraOracleContract.source();
         this.homoraBaseOracleContract = await ethers.getContractAt("contracts\\TierProxyOracle.sol:IBaseOracle",BASE_ORACLE_ADDRESS);
     }
@@ -258,8 +267,8 @@ class Liquidator {
         position = await this.homoraBankContract.positions(pID);
             
         //TODO This code is strange. I think this works because the collId entries are formated differently for different positions.
-        if(position.collId._hex != undefined){
-            collIdHex = position.collId._hex;
+        if( this.getHex(position.collId) != undefined){
+            collIdHex = this.getHex(position.collId);
         } else {
             collIdHex = position.collId;
         }
@@ -272,21 +281,30 @@ class Liquidator {
             console.log("ERROR: DB inconsistancy, multiple werc20Info instances of collId: " + collIdHex + " collToken: " + position.collToken + " on pID: " + pID);
         } else if (werc20Entries.length == 0){
             LPTokenAddress =  await this.createWERC20InfoEntry(collIdHex, position.collToken);
+            if (LPTokenAddress == "0x6c3F90f043a72FA612cbac8115EE7e52BDe6E490"){
+                //Fuck 3CRV
+                return false;
+            }
         } else {
             LPTokenAddress = werc20Entries[0].LPTokenAddress;
         }
 
         //Get the owner's alphaTier.
-        try {
-            tier = await this.alphaTierContract.getAlphaTier(position.owner);      
-        } catch (error) {
-            console.log("ERROR: Couldn't get tier for position" + pID + " " + error);
-            if (positionEntry != null){
-                console.log("Removing position " + position.pID + ", " + error);
-                this.positions.remove(positionEntry);
+        if (this.alphaTierContract == undefined){
+            tier = 1;
+        } else {
+            try {
+                tier = await this.alphaTierContract.getAlphaTier(position.owner);      
+            } catch (error) {
+                console.log("ERROR: Couldn't get tier for position" + pID + " " + error);
+                if (positionEntry != null){
+                    console.log("Removing position " + position.pID + ", " + error);
+                    this.positions.remove(positionEntry);
+                }
+                return false;
             }
-            return false;
         }
+        
 
         //Initialize debt tokens in the pricing DB. If the tokens already exist then they won't be initialized.
         for (let tokenAddy of debts[0]){
@@ -297,16 +315,22 @@ class Liquidator {
         // Initialize collateral token in the pricing DB.
         await this.initializeToken(LPTokenAddress,true,tierCount);
 
+        let amountsUnhexed = _.map(debts[1],this.getHex);
+        let debtsUnhexed = [debts[0],amountsUnhexed];
+        debtsUnhexed.tokens = debts[0];
+        debtsUnhexed.debts = amountsUnhexed;
+
+        //TODO Check to make sure there is no difference between inserting and updating debts as far as bigNumbers go. It might actually be a problem with when I request things from the contract.
         if (positionEntry == null){
-            this.positions.insert({pID: pID, collateralSize: position.collateralSize, debts: debts, LPTokenAddress: LPTokenAddress, collId: collIdHex, collToken: position.collToken, owner: position.owner, tier: tier});
+            this.positions.insert({pID: pID, collateralSize: this.getHex(position.collateralSize), debts: debtsUnhexed, LPTokenAddress: LPTokenAddress, collId: collIdHex, collToken: position.collToken, owner: position.owner, tier: this.getHex(tier)});
             console.log("Created position " + pID);
         } else {
-            positionEntry.collateralSize = position.collateralSize;
-            positionEntry.debts = debts;
+            positionEntry.collateralSize = this.getHex(position.collateralSize);
+            positionEntry.debts = debtsUnhexed;
             positionEntry.LPTokenAddress = LPTokenAddress;
             positionEntry.collIdHex = collIdHex;
             positionEntry.collToken = position.collToken;
-            positionEntry.tier = tier;
+            positionEntry.tier = this.getHex(tier);
             positionEntry.owner = position.owner;
             this.positions.update(positionEntry);
             console.log("Updated position " + pID);
@@ -322,6 +346,14 @@ class Liquidator {
         //TODO Stuff I need to update every 1-5s: prices of debtTokens, prices of collateral Tokens.
     }
 
+    getHex(bigNum){
+        if (bigNum._hex == undefined){
+            return bigNum.hex;
+        } else {
+            return bigNum._hex;
+        }
+    }
+
     /**
      * Updates the pricing database with the latest prices of each token.
      */
@@ -332,16 +364,18 @@ class Liquidator {
             tokenEntries = this.pricing.where(function(obj) {
                 return (true);
             });
+            for (let tokenEntry of tokenEntries){
+                //TODO try catch here. Put all chain and DB calls in try catch blocks.
+                // let priceRatioOT = await this.homoraBaseOracleContract.getETHPx(0);
+                let priceRatioOT = await this.homoraBaseOracleContract.getETHPx(tokenEntry.tokenAddress);
+                tokenEntry.priceRatioOT = this.getHex(priceRatioOT);
+                this.pricing.update(tokenEntry);
+            }
         } catch (error) {
-            console.log("ERROR: Getting all of tokens in the pricing DB while updating prices " + error);
+            console.log("ERROR: Getting all of tokens in the pricing DB while updating prices or updating prices" + error);
             return false;
         }
-        for (let tokenEntry of tokenEntries){
-            //TODO try catch here. Put all chain and DB calls in try catch blocks.
-            let priceRatioOT = await this.homoraBaseOracleContract.getETHPx(tokenEntry.tokenAddress);
-            tokenEntry.priceRatioOT = priceRatioOT;
-            this.pricing.update(tokenEntry);
-        }
+        
         return true;
     }
 
@@ -380,7 +414,7 @@ class Liquidator {
         let amounts = positionEntry.debts[1];
         for (let tokenIndex = 0; tokenIndex < debtTokens.length; tokenIndex++) {
             let tokenAddress = debtTokens[tokenIndex];
-            let debtAmount = BigNumber.from(amounts[tokenIndex].hex);
+            let debtAmount = BigNumber.from(amounts[tokenIndex]);
             let tokenEntry = this.pricing.findOne({'tokenAddress': tokenAddress});
 
             //The borrowFactor is the first index of the tokenFactors.
@@ -392,7 +426,7 @@ class Liquidator {
             
             //     uint ethValue = source.getETHPx(token).mul(amount).div(2**112);
             //     return ethValue.mul(borrFactor).div(10000);
-            let price = BigNumber.from(tokenEntry.priceRatioOT.hex);
+            let price = BigNumber.from(tokenEntry.priceRatioOT);
             let value = price.mul(debtAmount).div(ONE_TWELVE).mul(borrowFactor).div(10000);
             
             //DEBUG
@@ -442,7 +476,7 @@ class Liquidator {
         }
         let tokenEntry = this.pricing.findOne({'tokenAddress': positionEntry.LPTokenAddress});
         let underlyingRate = tokenEntry.underlyingRate;
-        let amountUnderlying = BigNumber.from(positionEntry.collateralSize.hex).mul(underlyingRate).div(ONE_TWELVE);
+        let amountUnderlying = BigNumber.from(positionEntry.collateralSize).mul(underlyingRate).div(ONE_TWELVE);
         let tier = positionEntry.tier;
         let collateralFactor = tokenEntry.tokenFactors[BigNumber.from(tier).toNumber()][1];
 
@@ -452,7 +486,7 @@ class Liquidator {
         //TODO
         //     require(collFactor != 0, 'bad coll factor');
 
-        let collateralValueTotal =  BigNumber.from(tokenEntry.priceRatioOT.hex).mul(amountUnderlying).mul(collateralFactor).div(ONE_TWELVE).div(10000);
+        let collateralValueTotal =  BigNumber.from(tokenEntry.priceRatioOT).mul(amountUnderlying).mul(collateralFactor).div(ONE_TWELVE).div(10000);
          //DEBUG
         // console.log(formatEther(collateralValueTotal));
         // console.log(formatEther(homoraValue));
@@ -484,12 +518,17 @@ class Liquidator {
         let flawlessUpdate = true;
         let nextPositionId;
         let tierCount;
-        try {
-            tierCount = await this.alphaTierContract.tierCount();
-        } catch (error) {
-            console.log("ERROR: Problem getting tierCount " + error);
-            return false;
+        if (this.alphaTierContract != undefined){
+            try {
+                tierCount = await this.alphaTierContract.tierCount();
+            } catch (error) {
+                console.log("ERROR: Problem getting tierCount " + error);
+                return false;
+            }
+        } else {
+            tierCount = 1;
         }
+        
         try {
             nextPositionId = await this.homoraBankContract.nextPositionId();
         } catch (error) {
@@ -530,15 +569,25 @@ class Liquidator {
             let tokenFactors;
             let priceRatioOT;
             let underlyingRate;
+            let liqIncentive;
             try {
                 tokenFactors = await this.getTokenfactors(tokenAddress,tierCount);
                 priceRatioOT = await this.homoraBaseOracleContract.getETHPx(tokenAddress);
+                //TODO We may want to update liqIncentives on the daily update.
+                liqIncentive = await this.homoraOracleContract.liqIncentives(tokenAddress);
+                let lpTokenMembers;
                 if (isCollateral == true){
+                    let LPToken = await ethers.getContractAt("contracts\\UniswapFlashQuery.sol:IUniswapV2Pair", tokenAddress);
+                    let token0 = await LPToken.token0();
+                    let token1 = await LPToken.token1();
+                    lpTokenMembers = [token0,token1];
                     underlyingRate = await this.getUnderlyingRate(tokenAddress);
                 } else {
-                    underlyingRate = BigNumber.from(0);
+                    lpTokenMembers = [];
+                    underlyingRate = '0x00';
                 }
-                this.pricing.insert({tokenAddress: tokenAddress, priceRatioOT: priceRatioOT, tokenFactors: tokenFactors, collateral: isCollateral, underlyingRate: underlyingRate});
+                
+                this.pricing.insert({tokenAddress: tokenAddress, priceRatioOT: this.getHex(priceRatioOT), tokenFactors: tokenFactors, collateral: isCollateral, underlyingRate: this.getHex(underlyingRate), liqIncentive: this.getHex(liqIncentive), lpTokenMembers: lpTokenMembers});
                 console.log("Initialized token " + tokenAddress);
             } catch (error) {
                 console.log("ERROR: Problem requesting token chain data while initializing " + error);
@@ -548,44 +597,54 @@ class Liquidator {
         return true;
     }
 
-    async liquidatePosition(pID){
-        let position= await this.homoraBankContract.positions(pID);
-
-        //TODO This check needs to be removed.
-        if (position.collToken != WMASTERCHEF_ADDRESS){
-            console.log("ERROR: This is not a sushiswap address");
-            return false;
-        }
+    /**
+     * Sends off a transaction that liquidates the position for the pID.
+     * TODO increase the efficiency of this. A lot of these calls can be eliminated and use the DB.
+     * @param {number} pID Position ID
+     * @returns {boolean} Whether the liquidation was successful.
+     */
+    async liquidatePosition(positionEntry){
+        // let positionEntry =  this.positions.findOne({'pID': pID});
+        
+        // let position= await this.homoraBankContract.positions(pID);
 
         //This is for masterChefv2. The masterChefPid is the most significant 16 bits of the collId, stored in little endian.
         // let masterChefPid  = this.swap16(position.collId.toHexString().substr(0,6));
 
         //This is for masterChefv1, there is no pid in that case, only the id.
-        let masterChefID= position.collId;
-        let LPTokenAddress  = await this.wMasterChefContract.getUnderlyingToken(position.collId);
+        let masterChefID = positionEntry.collId;
+        // let LPTokenAddress  = await this.wMasterChefContract.getUnderlyingToken(position.collId);
+        let LPTokenAddress = positionEntry.LPTokenAddress;
+        // let debtInfo = await this.getDebtTokensAndAmounts(LPTokenAddress,pID);
 
-        let debtInfo = await this.getDebtTokensAndAmounts(LPTokenAddress,pID);
+        let debtTokenIndex = this.getBiggestDebtTokenIndex(positionEntry);
+        let debtToken = positionEntry.debts[0][debtTokenIndex];
+        const debtInWETH = (debtToken == WETH_ADDRESS)  ? true : false;
+        let otherTokenAddress;
+        //TODO find the otherTokenAddress
 
-        //A BigNumber of 2**112 because getETHPx returns the price ratio to ETH multiplied by it.
+        let debtInfo = {debtAmount: positionEntry.debts[1][debtTokenIndex],debtToken: debtToken,otherTokenAddress:otherTokenAddress, debtInWETH: debtInWETH}; 
+
         // getETHPx returns WETH/token
-        let lpTokenPriceOT= await this.homoraBaseOracleContract.getETHPx(LPTokenAddress);
 
-        // console.log("collToken: " + position.collToken);
-        // console.log("collId: " + position.collId.toString());
-        // console.log("werc20ID: " + werc20ID);
+        //TODO There's a completely different control flow for non-weth pairs like USDC/USDT
+        let lpTokenEntry =  this.pricing.findOne({'tokenAddress': LPTokenAddress});
+        let debtTokenEntry =  this.pricing.findOne({'tokenAddress': debtToken});
+        let otherTokenEntry =  this.pricing.findOne({'tokenAddress': otherTokenAddress});
 
-        const colBountyCalculated= await this.homoraOracleContract.convertForLiquidation(debtInfo.debtToken, position.collToken, position.collId, debtInfo.debtAmount);
+        // const colBountyCalculated= await this.homoraOracleContract.convertForLiquidation(debtInfo.debtToken, position.collToken, position.collId, debtInfo.debtAmount);
 
-        const bountyLP= colBountyCalculated.gt(position.collateralSize) ? position.collateralSize : colBountyCalculated;
-        //The value of the bounty in ETH. NoOT means that it doesn't have the ONE_TWELVE term.
-        const bountyLPvalueNoOT= bountyLP.mul(lpTokenPriceOT).div(ONE_TWELVE);
+        const bountyLPvalueNoOT = this.bountyValueInETH(positionEntry);
 
-        //OT means that it's still multiplied by ONE_TWELVE
+        // const bountyLP= colBountyCalculated.gt(position.collateralSize) ? position.collateralSize : colBountyCalculated;
+        // //The value of the bounty in ETH. NoOT means that it doesn't have the ONE_TWELVE term. OT means that it's still multiplied by ONE_TWELVE
+        // const bountyLPvalueNoOT= bountyLP.mul(lpTokenEntry.priceRatioOT).div(ONE_TWELVE);
+
         let priceRatioOT;
         if (debtInfo.debtInWETH){
-            priceRatioOT = await this.homoraBaseOracleContract.getETHPx(debtInfo.otherTokenAddress);
+            priceRatioOT = otherTokenEntry.priceRatioOT;
         } else {
-            priceRatioOT = await this.homoraBaseOracleContract.getETHPx(debtInfo.debtToken);
+            priceRatioOT = debtTokenEntry.priceRatioOT;
         }
 
         let debtTokenOutLP;
@@ -593,7 +652,7 @@ class Liquidator {
         
         if (debtInfo.debtInWETH){
             debtTokenOutLP = bountyLPvalueNoOT.div(2).mul(LP_SLIPPAGE).div(1000);
-            otherTokenOutLP = bountyLPvalueNoOT.mul(ONE_TWELVE).div(2).div(priceRatioOT).mul(LP_SLIPPAGE).div(1000);//TODO Check the validity of all of the parameters that I send to the contract in the debugger, on two different accounts.
+            otherTokenOutLP = bountyLPvalueNoOT.mul(ONE_TWELVE).div(2).div(priceRatioOT).mul(LP_SLIPPAGE).div(1000);
         } else {
             otherTokenOutLP = bountyLPvalueNoOT.div(2).mul(LP_SLIPPAGE).div(1000);
             debtTokenOutLP = bountyLPvalueNoOT.div(2).mul(ONE_TWELVE).div(priceRatioOT).mul(LP_SLIPPAGE).div(1000);
@@ -609,12 +668,7 @@ class Liquidator {
             amountOutSwap = debtInfo.debtAmount.mul(FLASHLOAN_FEE_NOMINATOR).div(10000).sub(debtTokenOutLP);
             amountInSwap = amountOutSwap.mul(priceRatioOT).div(ONE_TWELVE).mul(1000).div(SWAP_SLIPPAGE);
         }
-
-        // const slippageTolerance = new Percent('50', '10000') // 50 bips, or 0.50%
-
         //Okay now I need to calculate what amount in and amount out I need for the swap back to debt token. amountOut is going to be only the debt size if I borrowed something other than WETH. If I borrowed WETH, then I'm going to swap in all of the other token that I recieved. Then after I paid off the debt, this would mean that I only have WETH left over in the contract. At which point in a second transaction after the liquidation, will unwrap the WETH and withdraw the ETH. 
-
-        //TODO I have to figure out what calculations I can do asynchronously, because at the moment it takes way too long to make all these requests.
         
         //Then in the contract we calculate how much ETH worth of LP we have, then divide that by 2, so half is amountOutEth, and half times token/eth price is amountOutToken
         //Then figure out how much of the otherToken that you have after taking out the LP by checking the balance, and swap it for debtToken. Calculate this price by using token/WETH
@@ -636,7 +690,7 @@ class Liquidator {
         try {
             await this.bundleExecutorContract.flashLiquidate(debtInfo.debtToken,debtInfo.debtAmount,data);
         } catch (error) {
-            console.log(error);
+            console.log("ERROR: The liquidation transaction failed " + error);
         }
 
         return true;
@@ -654,6 +708,7 @@ class Liquidator {
     async printCollateralValue(pID ){
         let collateralETHValue= await this.homoraBankContract.getCollateralETHValue(pID).catch((err)=>{console.log(err);})
         console.log("Account value: " + formatEther(collateralETHValue) + " Ether.");
+        formatUnits(0,0);
     }
 
     async getFlashloan(){
@@ -735,20 +790,252 @@ class Liquidator {
     }
 
     /**
+     * Infinite loop that searches for liquidations. It updates the prices every seven seconds. 
+     */
+    async searchForLiquidations(){
+        let currentBountyTotal;
+        let defaultingPositions;
+        while(true){
+            try {
+                //TODO make sure this runs fast enough.
+                await this.updatePrices();
+                defaultingPositions = this.findAllDefaultingPositions();
+                currentBountyTotal = this.currentBountyForLiquidationsInUSD(defaultingPositions);
+            } catch (error) {
+                console.log("ERROR: Failed updating our understanding of the defaulting state of the positions.");
+                continue;//TODO is this right?
+            }
+          
+            if (this.currentBountyTotal > THRESHHOLD_FOR_FREE_FOR_ALL){
+                freeForAll = true;
+            }
+            if (freeForAll){
+                for (const position of defaultingPositions) {
+                    try {
+                        //TODO We need to figure out how to lock from making multiple attempts on the same position. Because as is, if the transaction takes longer than 7ish seconds complete then we'll try again. We should probably read up on asyncronous programming practices. What I might be able to do is check that the promise is resolved regularly. That would be less efficient than a callback though. This function could set a lock then the callback would remove the lock. We would need to make sure that the data structure was atomic though. So that means using another collection most likely. I think javascript passes by value and not by reference. Now, what if it the liquidation fails. There are many reasons it could fail, and if it fails for a reason that it won't later, then . This might be as easy as a class variable hashmap that has entries deleted on callback from liquidatePosition().
+                        if (this.bountyValueInUSD(position) > THRESHHOLD_FOR_LIQUIDATION){
+                            this.liquidatePosition(position);    
+                        }
+                    } catch (error) {
+                        console.log("ERROR: Problem liquidating " + pID + " " + error);
+                    }
+                }
+            }
+            await new Promise(resolve => setTimeout(resolve, 7000));
+        }
+    }
+
+    /**
+     * Infinite loop updates the DBs once a day.
+     */
+    async updateDatabasesLoop(){
+        while (true){
+            try {
+                this.fullDatabasesUpdate();   
+            } catch (error) {
+                console.log("Failed to update DBs " + error);
+            }
+            await new Promise(resolve => setTimeout(resolve, 1000 * 60 * 60 * 24));
+        }
+    }
+
+    async main(){
+        this.searchForLiquidations();
+        this.updateDatabasesLoop();
+        while(true){
+            await new Promise(resolve => setTimeout(resolve, 1000 * 60 * 60 * 24)); //sleep a day
+            //TODO sleep here? Figure out how to safely wait for the async functions to continue their work.
+        }
+    }
+
+    /**
      * Calculates the current value of the bounty for all liquidations this block. This is used to trigger a free for all for liquidating positions. We don't want to expose that we have liquidation code until we can make hundreds of thousands or millions of dollars. It possible that one person screws up. We should do a check that at least $100,000 is up for grabs and at least two positions are offering over $50,000. This means that there is a collapse currently happening. TODO the other way to do this is monitor price of tether but that's a little more unreliable.
      * @param {Array<positionEntries>} defaultingPositions 
      * @returns {number} The value of the bounty for all positions I can liquidate in this moment.
      */
-    currentBountyForLiquidations(defaultingPositions){
+    currentBountyForLiquidationsInUSD(defaultingPositions){
       let cumulativeBountyValue = 0;
       for (const position of defaultingPositions) {
-          let bountyValue = parseInt(formatEther(this.getCollateralValue(position.pID).mul(ethPrice)).split('.')[0]) * 0.05;
-          //TODO Store the price of ethereum as a global variable and update it once a day in the updateAllDB function.
+          let bountyValue = this.bountyValueInUSD(position);
+          //TODO Store the price of ethereum as a global variable and update it once a day in the updateAllDB function. chainlink 0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419 latestAnswer()
           cumulativeBountyValue += bountyValue;
       }
       return cumulativeBountyValue;
     }
 
+    
+     /**
+     * Gives the bounty value for liquidating the position. Incorporates TierProxyOracle.convertForLiquidation(). 
+     * @param {PositionEntry} position 
+     * @returns {BigNumber} The value in ETH of the bounty for liquidating the given position.
+     */
+    bountyValueInETH(position){
+        let debtTokenPaidcollateralAmount = this.convertForLiquidation(position);
+        let lpTokenEntry = this.pricing.findOne({'tokenAddress': position.LPTokenAddress});
+        if (debtTokenPaidcollateralAmount.lt(position.collateralSize)){
+            return debtTokenPaidcollateralAmount.mul(lpTokenEntry.priceRatioOT).div(ONE_TWELVE);
+        } else {
+            return position.collateralSize.mul(lpTokenEntry.priceRatioOT).div(ONE_TWELVE);
+        }
+    }
+
+      /**
+     * 
+     * @param {Position} position Defaulting position to appraise
+     * @returns {number} The USD value of the bounty for the position.
+     */
+       bountyValueInUSD(position){
+        return parseInt(formatEther(this.bountyValueInETH(position).mul(ethPrice)).split('.')[0]);
+  }
+
+    /* 
+    function convertForLiquidation(
+    address tokenIn,
+    address tokenOut,
+    uint tokenOutId,
+    uint amountIn
+  ) external view returns (uint) {
+    require(whitelistERC1155[tokenOut], 'bad token');
+    address tokenOutUnderlying = IERC20Wrapper(tokenOut).getUnderlyingToken(tokenOutId);
+    uint rateUnderlying = IERC20Wrapper(tokenOut).getUnderlyingRate(tokenOutId);
+    uint liqIncentiveIn = liqIncentives[tokenIn];
+    uint liqIncentiveOut = liqIncentives[tokenOutUnderlying];
+    require(liqIncentiveIn != 0, 'bad underlying in');
+    require(liqIncentiveOut != 0, 'bad underlying out');
+    uint pxIn = source.getETHPx(tokenIn);
+    uint pxOut = source.getETHPx(tokenOutUnderlying);
+    uint amountOut = amountIn.mul(pxIn).div(pxOut);
+    amountOut = amountOut.mul(2**112).div(rateUnderlying);
+    return amountOut.mul(liqIncentiveIn).mul(liqIncentiveOut).div(10000 * 10000);
+  } 
+   */
+  
+  /**
+   * Takes a position and gives what the value of a liquidation is if the debt token with the largest current debt is used to pay.
+   * @param {Position} position The position we're converting the best debt token for.
+   * @returns The collateral LPToken amount equivalent to the greatest debt token.
+   */
+    convertForLiquidation(position){
+        //TODO test function
+        let lpTokenEntry = this.pricing.findOne({'tokenAddress': position.LPTokenAddress});
+        let debtTokenIndex = this.getBiggestDebtTokenIndex(position);
+        let debtTokenEntry = this.pricing.findOne({'tokenAddress': position.debts[0][debtTokenIndex]});
+        return position.debts[1][debtTokenIndex].mul(debtTokenEntry.priceRatioOT).div(lpTokenEntry.priceRatioOT).mul(ONE_TWELVE).div(lpTokenEntry.underlyingRate).mul(lpTokenEntry.liqIncentive).mul(debtTokenEntry.liqIncentive).div(10000).div(10000);
+    }
+
+    async flashBotsLiquidate(blockNumber) {
+          const minerReward = bestCrossedMarket.profit.mul(minerRewardPercentage).div(100);
+
+          //TOOD replace with the correct parameters, and integrate EIP-1599 changes https://github.com/flashbots/ethers-provider-flashbots-bundle
+          const transaction = await this.bundleExecutorContract.populateTransaction.flashLiquidate(bestCrossedMarket.volume, minerReward, targets, payloads, {
+            gasPrice: BigNumber.from(0),
+            gasLimit: BigNumber.from(1000000),
+          });
+    
+          try {
+            const estimateGas = await this.bundleExecutorContract.provider.estimateGas(
+              {
+                ...transaction,
+                from: this.executorWallet.address
+              })
+            if (estimateGas.gt(1400000)) {
+              console.log("EstimateGas succeeded, but suspiciously large: " + estimateGas.toString())
+              return;
+            }
+            transaction.gasLimit = estimateGas.mul(2)
+          } catch (e) {
+            console.warn(`Estimate gas failure for ${JSON.stringify(bestCrossedMarket)}`)
+            return;
+          }
+          const bundledTransactions = [
+            {
+              signer: this.executorWallet,
+              transaction: transaction
+            }
+          ];
+          console.log(bundledTransactions)
+          const signedBundle = await this.flashbotsProvider.signBundle(bundledTransactions)
+          //
+          const simulation = await this.flashbotsProvider.simulate(signedBundle, blockNumber + 1 )
+          if ("error" in simulation || simulation.firstRevert !== undefined) {
+            console.log(`Simulation Error, skipping`)
+            return;
+          }
+          console.log(`Submitting bundle, profit sent to miner: ${bigNumberToDecimal(simulation.coinbaseDiff)}, effective gas price: ${bigNumberToDecimal(simulation.coinbaseDiff.div(simulation.totalGasUsed), 9)} GWEI`)
+          const bundlePromises =  _.map([blockNumber + 1, blockNumber + 2], targetBlockNumber =>
+            this.flashbotsProvider.sendRawBundle(
+              signedBundle,
+              targetBlockNumber
+            ))
+          await Promise.all(bundlePromises)
+          return
+        throw new Error("No arbitrage submitted to relay")
+      }
+    
+    async sendBundle(transaction, blockNumber){    
+        try {
+            const estimateGas = await this.bundleExecutorContract.provider.estimateGas(
+            {
+                ...transaction,
+                from: this.executorWallet.address
+            })
+            if (estimateGas.gt(1400000)) {
+                console.log("EstimateGas succeeded, but suspiciously large: " + estimateGas.toString())
+                return
+            }
+            transaction.gasLimit = estimateGas.mul(2)
+        } catch (e) {
+            console.warn(`Estimate gas failure for ${JSON.stringify(transaction)}`)
+            return
+        }
+        const bundledTransactions = [
+            {
+            signer: this.executorWallet,
+            transaction: transaction
+            }
+        ];
+        console.log(bundledTransactions)
+        const signedBundle = await this.flashbotsProvider.signBundle(bundledTransactions)
+        //
+        const simulation = await this.flashbotsProvider.simulate(signedBundle, blockNumber + 1 )
+        if ("error" in simulation || simulation.firstRevert !== undefined) {
+            console.log(`Simulation Error on ${transaction}`)
+            return
+        }
+        console.log(`Submitting bundle, profit sent to miner: ${bigNumberToDecimal(simulation.coinbaseDiff)}, effective gas price: ${bigNumberToDecimal(simulation.coinbaseDiff.div(simulation.totalGasUsed), 9)} GWEI`)
+        const bundlePromises =  _.map([blockNumber + 1, blockNumber + 2], targetBlockNumber =>
+            this.flashbotsProvider.sendRawBundle(
+            signedBundle,
+            targetBlockNumber
+        ))
+        await Promise.all(bundlePromises)
+        return
+    }
+
+    /**
+     * 
+     * @param {Position} position Position from the DB
+     * @returns {string} The token index of the token with the biggest valued debt in the position.
+     */
+    getBiggestDebtTokenIndex(position){
+        //TODO This really needs to be tested.
+        let biggestToken;
+        let biggestValue = BigNumber.from(0);
+        let tokens = position.debts[0];
+        let debtAmounts = position.debts[1];
+        for (const tokenIndex in tokens) {
+            let tokenEntry = this.pricing.findOne({'tokenAddress': tokens[tokenIndex]});
+            let value = debtAmounts[tokenIndex];
+            value = value.mul(tokenEntry.priceRatioOT);
+            if (value.gt(biggestValue)){
+                biggestValue = value;
+                biggestToken = tokenIndex;
+            }
+        }
+        return biggestToken;
+    }
+
+     
 
     /**
      * Returns whethen a given position is in default.
@@ -756,16 +1043,7 @@ class Liquidator {
      * @returns {boolean} Whether the position is in default.
      */
     isAccountDefaulting(pID){
-        return (getCollateralValue(pID) < this.getDebtValue(pID));
-    }
-
-    async testNaiveAccounts(){
-        for (const pID of this.NAIVE_ACCOUNTS ){
-            console.log(pID);
-            if (await this.isAccountDefaulting(pID)){
-              //TODO go do a liquidation here.
-            }
-        }
+        return (this.getCollateralValue(pID) < this.getDebtValue(pID));
     }
 }
 
