@@ -64,7 +64,7 @@ contract FlashBotsMultiCall  is FlashLoanReceiverBase, ERC1155Holder  {
     
     //IWETH private constant WETH = IWETH(0xB4FBF271143F4FBf7B91A5ded31805e42b2208d6); //Goerli
 
-// (uint flashInfo.positionID, uint flashInfo.masterChefID, uint flashInfo.LPBounty, address flashInfo.LPtokenAddress, uint flashInfo.otherTokenOutLP, uint flashInfo.debtTokenOutLP, uint flashInfo.amountInSwap, uint flashInfo.amountOutSwap, uint flashInfo.deadline, address flashInfo.otherTokenAddress) 
+// (uint flashInfo.positionID, uint flashInfo.masterChefID, uint flashInfo.LPBounty, address flashInfo.LPtokenAddress, uint flashInfo.otherTokenOutLP, uint flashInfo.debtTokenOutLP, uint flashInfo.amountInSwap, uint flashInfo.amountOutSwap, uint flashInfo.deadline, address flashInfo.secondTokenAddress) 
     struct FlashInfo{
         uint positionID;
         uint masterChefID;
@@ -75,7 +75,7 @@ contract FlashBotsMultiCall  is FlashLoanReceiverBase, ERC1155Holder  {
         uint amountInSwap;
         uint amountOutSwap;
         uint deadline;
-        address otherTokenAddress;
+        address secondTokenAddress;
     }
 
 
@@ -153,7 +153,7 @@ contract FlashBotsMultiCall  is FlashLoanReceiverBase, ERC1155Holder  {
 
         FlashInfo memory flashInfo;
         {
-            (uint positionID, uint masterChefID, uint LPBounty, address LPtokenAddress, uint otherTokenOutLP, uint debtTokenOutLP, uint amountInSwap, uint amountOutSwap, uint deadline, address otherTokenAddress) = abi.decode(params, (uint,uint,uint,address,uint,uint,uint,uint,uint,address));
+            (uint positionID, uint masterChefID, uint LPBounty, address LPtokenAddress, uint otherTokenOutLP, uint debtTokenOutLP, uint amountInSwap, uint amountOutSwap, uint deadline, address secondTokenAddress, address thirdTokenAddress) = abi.decode(params, (uint,uint,uint,address,uint,uint,uint,uint,uint,address,address));
 
             flashInfo.positionID = positionID;
             flashInfo.masterChefID = masterChefID;
@@ -164,12 +164,14 @@ contract FlashBotsMultiCall  is FlashLoanReceiverBase, ERC1155Holder  {
             flashInfo.amountInSwap = amountInSwap;
             flashInfo.amountOutSwap = amountOutSwap;
             flashInfo.deadline = deadline;
-            flashInfo.otherTokenAddress = otherTokenAddress;
+            flashInfo.secondTokenAddress = secondTokenAddress;
+            flashInfo.thirdTokenAddress = thirdTokenAddress;
         }
 
         require(IERC20(underlying).approve(address(BANK), amount), 'approval of homorabank to spend my loan failed.');
 
         //TODO this might need to be changed to setApprovalToAll https://docs.openzeppelin.com/contracts/3.x/api/token/erc1155#IERC1155-setApprovalForAll-address-bool-
+        //TODO I think here we need to test between the different LPtokens: uni, sushi, or crv, then there will be three different functions from there. I think we'll have to figure it out in the bot and send the information up.
         IERC20 lp = IERC20(flashInfo.LPtokenAddress);
         require(lp.approve(SUSHISWAP_ROUTER_ADDRESS, flashInfo.LPBounty), 'approve failed.');
 
@@ -216,7 +218,7 @@ contract FlashBotsMultiCall  is FlashLoanReceiverBase, ERC1155Holder  {
         uint deadline = block.timestamp.add(500);
         SUSHI_ROUTER.removeLiquidity(
           underlying,
-          flashInfo.otherTokenAddress,
+          flashInfo.secondTokenAddress,
           flashInfo.LPBounty,
           flashInfo.debtTokenOutLP,
           flashInfo.otherTokenOutLP,
@@ -232,11 +234,11 @@ contract FlashBotsMultiCall  is FlashLoanReceiverBase, ERC1155Holder  {
         //     console.logUint(WETHbalance);
         // }
 
-        require(IERC20(flashInfo.otherTokenAddress).approve(address(UNISWAPROUTER), flashInfo.amountInSwap), 'approve failed.');
+        require(IERC20(flashInfo.secondTokenAddress).approve(address(UNISWAPROUTER), flashInfo.amountInSwap), 'approve failed.');
 
         {
             address[] memory path = new address[](2);
-            path[0] = flashInfo.otherTokenAddress;
+            path[0] = flashInfo.secondTokenAddress;
             path[1] = underlying;
             //TODO This may need to change because forETH variants may be more efficient
             UNISWAPROUTER.swapExactTokensForTokens(flashInfo.amountInSwap, flashInfo.amountOutSwap, path, initiator, block.timestamp);
@@ -264,7 +266,7 @@ contract FlashBotsMultiCall  is FlashLoanReceiverBase, ERC1155Holder  {
         //     uint under = IERC20(underlying).balanceOf(address(this));
         //     console.log("under: ");
         //     console.logUint(under);
-        //     uint other = IERC20(flashInfo.otherTokenAddress).balanceOf(address(this));
+        //     uint other = IERC20(flashInfo.secondTokenAddress).balanceOf(address(this));
         //     console.log("other: ");
         //     console.logUint(other);
         //     console.log("owed: ");

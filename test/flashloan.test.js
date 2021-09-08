@@ -115,17 +115,25 @@ describe("Liquidator", function(){
 
     // let tierCount = await liq.alphaTierContract.tierCount();
 
-    // await liq.fullDatabasesUpdate();
+    await liq.main();
 
+    while (true){
+      await liq.updatePrices();
+      console.log("prices updated")
+    }
+
+    await liq.fullDatabasesUpdate();
+
+    //TODO Alright let's figure out hardhat_setStorageAt to change the price of tether, and we'll use that for my tests from now on. We also need to test throughput on a personal node. If it's high enough, we can use homorabank's interface instead of fucking with all these databases and risking them breaking my code. The first way to do this is to just manually change the price of tether in the database.
     await liq.getAndStorePosition(289,1);
 
     // await historicalWalk(environment,liq, 2387);
 
 
-    await liq.updatePrices();
 
     const ethBalanceBeforeLiquidation = await liq.executorWallet.getBalance();
-    await liq.liquidatePosition(289);
+    let positionEntry =  liq.positions.findOne({'pID': 289});
+    await liq.liquidatePosition(positionEntry);
     const ethBalanceAfterLiquidation = await liq.executorWallet.getBalance();
     const profit = ethBalanceAfterLiquidation.sub(ethBalanceBeforeLiquidation);
     console.log("We made this much ETH: " + formatEther(profit));
