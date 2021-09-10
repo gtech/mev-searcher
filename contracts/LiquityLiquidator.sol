@@ -57,6 +57,10 @@ contract LiquityLiquidator {
     receive() external payable {
     }
 
+    function destroy() external onlyExecutor {
+        selfdestruct(executor);
+    }
+
     function withdrawErc20(IERC20 token) external onlyExecutor {
         require(token.transfer(msg.sender, token.balanceOf(address(this))), "Transfer failed");
     }

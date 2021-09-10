@@ -16,6 +16,8 @@ const THRESHHOLD_FOR_LIQUIDATION = 2; //Using ETH
 let ethPrice = 3038; //TODO These probably should be class vars instead of globals.
 const NO_LIQUIDATIONS = "VM Exception while processing transaction: reverted with reason string 'TroveManager: nothing to liquidate'";
 const LUSD = "0x5f98805A4E8be255a32880FDeC7F6728C6568bA0";
+const NOT_DEPLOYED_ON_MAINNET = true;
+const GOERLI_DEPLOY = true;
 
 
 class LiquityBot {
@@ -27,44 +29,48 @@ class LiquityBot {
     executorWallet;
 
    constructor(flashbotsProvider) {
-        // this.executorWallet = executorWallet;        
+        // this.executorWallet = executorWallet;
         this.flashbotsProvider = flashbotsProvider;
         // this.bundleExecutorContract = bundleExecutorContract;
         // this.PRIVATE_KEY = process.env.PRIVATE_KEY || "";
         // this.BUNDLE_EXECUTOR_ADDRESS = process.env.BUNDLE_EXECUTOR_ADDRESS || "";
 
-        
+
     }
 
     async initialize(){
-        
+        // if (this.executorWallet.provider._network.chainId === 31337){
+        //     await hre.network.provider.request({
+        //         method: "hardhat_impersonateAccount",
+        //         params: ["0x72BA4622A13C58abacbA231d7B00750a9048726d"],
+        //       });
+        // }
+        const [owner] = await ethers.getSigners();
+        this.executorWallet = owner;
 
-        if (process.env.PRIVATE_KEY != undefined){
-            let wallet = new Wallet(process.env.PRIVATE_KEY);
-            this.executorWallet = wallet.connect(ethers.provider);
-        } else {
-            const [owner] = await ethers.getSigners();
-            this.executorWallet = owner;
-        }
-        
+        // if (process.env.PRIVATE_KEY != undefined){
+        //     let wallet = new Wallet(process.env.PRIVATE_KEY);
+        //     this.executorWallet = wallet.connect(ethers.provider);
+        // } else {
+
+        // }
+
 
         await this.executorWallet.provider._networkPromise;
-        if (this.executorWallet.provider._network.chainId === 31337) {
-            let LiquityLiquidator = await ethers.getContractFactory("LiquityLiquidator");
-            // let  = await fact.connect(this.executorWallet);
-
-            //TODO Fuck, looks like I may have to put my private keys in my hardhat.config.js. I should just do it the way that Arbitrage does it. No, let's make it... wait what about when I'm in the middle of developing one or the other? Yeah we shouldn't be pushing hardhat.config.js anyway. This is for the best.
-            this.liquityLiquidatorContract = await LiquityLiquidator.deploy(this.executorWallet.address);
+        let LiquityLiquidator = await ethers.getContractFactory("LiquityLiquidator");
+        if ((this.executorWallet.provider._network.chainId === 31337 && NOT_DEPLOYED_ON_MAINNET) || (GOERLI_DEPLOY && this.executorWallet.provider._network.chainId === 5) ) {
+            this.liquityLiquidatorContract = await LiquityLiquidator.deploy(this.executorWallet.address, {gasLimit: 600000});
             console.log("LiquityLiquidator deployed to: ", this.liquityLiquidatorContract.address);
-            
+
             const deploymentData = LiquityLiquidator.interface.encodeDeploy([this.executorWallet.address]);
             const estimatedGas = await ethers.provider.estimateGas({ data: deploymentData });
             console.log("took approx this much gas: " + estimatedGas);
 
         } else {
-            // this.BUNDLE_EXECUTOR_ADDRESS = process.env.BUNDLE_EXECUTOR_ADDRESS;
             this.liquityLiquidatorContract = await ethers.getContractAt("LiquityLiquidator",process.env.LIQUITY_LIQUIDATOR_ADDRESS);
         }
+
+
     }
 
     async liquidateTroves(){
@@ -76,11 +82,14 @@ class LiquityBot {
             try {
                 //TODO might need to change this to debug_traceCall
                 //TODO This has to be tested on my private node.
+                //TODO The problem here might be that a revert costs a ton of gas.
+                //I think we're going to need to interact directly with geth. Maybe we'll just use includes gas exception and hope for the best. It may be thath callStatic doesn't even work for my node though.
+                // let gasEstimate = await this.liquityLiquidatorContract.estimateGas.liquidateTroves(MINER_PERCENTAGE,NUMBER_OF_TROVES_TO_LIQUIDATE);
                 theoreticalLiquidationBounty = await this.liquityLiquidatorContract.callStatic.liquidateTroves(MINER_PERCENTAGE,NUMBER_OF_TROVES_TO_LIQUIDATE);
             } catch (error) {
-                if (error.message == NO_LIQUIDATIONS){
+                if (error.message == NO_LIQUIDATIONS || error.message.includes("cannot estimate gas")){
                     //We just figured out there are no liquidations ready.
-                    console.log("trying again.")
+                    console.log("No defaulting troves or gas exception, trying again.")
                     await sleep(5000);
                     continue;
                 }
@@ -105,11 +114,11 @@ class LiquityBot {
             }
         }
      }
-     //  Make sure the Liquidator doesn't use the main wallet ever yet somehow. Test the bot on the forked net using the live wallet. Figure out how to do that safely. Create a main script that will run the bot. Set up my own node and use that for live. Test as much of the code on live as possible. Test my flashbots code on live with a similar transaction from the same wallet and contract. Like like transfer in ETH or something or just simulate it. Try to make it as easy as possible to convert to the Liquidator alphahomora bot. 
+     //Launch the smart contract. Test my flashbots code on live with a similar transaction from the same wallet and contract. Set up my own node and use that for live. Test as much of the code on live as possible. Like like transfer in ETH or something or just simulate it. Try to make it as easy as possible to convert to the Liquidator alphahomora bot. Create a main script that will run the bot.
 
-    async sendBundle(transaction, blockNumber){    
+    async sendBundle(transaction, blockNumber, mySmartContract){
         try {
-            const estimateGas = await this.bundleExecutorContract.provider.estimateGas(
+            const estimateGas = await mySmartContract.provider.estimateGas(
             {
                 ...transaction,
                 from: this.executorWallet.address
