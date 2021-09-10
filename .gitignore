@@ -80,6 +80,7 @@ artifacts
 liquidator.db
 .env
 data
+hardhat.config.js
 
 #hardhat cache
 cache

@@ -37,13 +37,23 @@ class LiquityBot {
     }
 
     async initialize(){
-        const [owner] = await ethers.getSigners();
-        this.executorWallet = owner;
+        
 
-        await owner.provider._networkPromise;
-        if (owner.provider._network.chainId === 31337) {
+        if (process.env.PRIVATE_KEY != undefined){
+            let wallet = new Wallet(process.env.PRIVATE_KEY);
+            this.executorWallet = wallet.connect(ethers.provider);
+        } else {
+            const [owner] = await ethers.getSigners();
+            this.executorWallet = owner;
+        }
+        
+
+        await this.executorWallet.provider._networkPromise;
+        if (this.executorWallet.provider._network.chainId === 31337) {
             let LiquityLiquidator = await ethers.getContractFactory("LiquityLiquidator");
+            // let  = await fact.connect(this.executorWallet);
 
+            //TODO Fuck, looks like I may have to put my private keys in my hardhat.config.js. I should just do it the way that Arbitrage does it. No, let's make it... wait what about when I'm in the middle of developing one or the other? Yeah we shouldn't be pushing hardhat.config.js anyway. This is for the best.
             this.liquityLiquidatorContract = await LiquityLiquidator.deploy(this.executorWallet.address);
             console.log("LiquityLiquidator deployed to: ", this.liquityLiquidatorContract.address);
             
@@ -76,6 +86,7 @@ class LiquityBot {
                 }
                 //Some unexpected error.
                 console.log("ERROR: " + error);
+                await sleep(5000);
                 continue;
             }
             if (formatEther(theoreticalLiquidationBounty) > THRESHHOLD_FOR_LIQUIDATION){

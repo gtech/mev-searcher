@@ -45,7 +45,7 @@ contract LiquityLiquidator {
     }
     
     modifier onlyExecutor() {
-        require(msg.sender == executor);
+        require(msg.sender == executor, "not executor");
         _;
     }
 
