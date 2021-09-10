@@ -90,6 +90,7 @@ const ERC20ABI = [
 // });
 
 describe("Liquidator", function(){
+  return; //WARNING do not remove this until you have prevented Liquidator from using the mainnet wallet
   let environment;
   let liq;
 
@@ -114,6 +115,8 @@ describe("Liquidator", function(){
 
 
     // let tierCount = await liq.alphaTierContract.tierCount();
+
+    return;
 
     await liq.main();
 

@@ -11,6 +11,7 @@ const { Signer, Contract, ContractFactory, providers, Wallet } = require("ethers
 require("@nomiclabs/hardhat-waffle");
 const { ProviderConnectInfo } = require("hardhat/types/provider");
 const { Liquidator } = require("./Liquidator");
+const { LiquityBot } = require("./LiquityBot");
 const dotenv = require('dotenv');
 
 class Environment {
@@ -54,6 +55,13 @@ class Environment {
 
     async createLiquidator(){
         let liquidator = new Liquidator(this.flashbotsProvider);
+        await liquidator.initialize();
+        this.liquidators.push(liquidator);
+        return liquidator;
+    }
+
+    async createLiquityBot(){
+        let liquidator = new LiquityBot(this.flashbotsProvider);
         await liquidator.initialize();
         this.liquidators.push(liquidator);
         return liquidator;

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.11;
+pragma solidity 0.6.12;
 
 // uint128 addition and subtraction, with overflow protection.
 

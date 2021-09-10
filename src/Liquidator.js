@@ -32,6 +32,7 @@ const BLACKLIST = ['0xf80758aB42C3B07dA84053Fd88804bCB6BAA4b5c', //sUSD/ETH
                     '0xF54025aF2dc86809Be1153c1F20D77ADB7e8ecF4',//Balancer pool token
                     ]
 const THREE_CRV_ADDRESS = "0x6c3F90f043a72FA612cbac8115EE7e52BDe6E490";
+const LIQUITY_ADDRESS = "0xA39739EF8b0231DbFA0DcdA07d7e29faAbCf4bb2";
 // const HOMORA_ORACLE_ADDRESS  = "0x914C687FFdAB6E1B47a327E7E4C10e4a058e009d"; 
 
 // export interface DebtInfo {
@@ -57,6 +58,7 @@ class Liquidator {
     // readonly BUNDLE_EXECUTOR_ADDRESS;
     flashbotsProvider;
     bundleExecutorContract;
+    liquityLiquidatorContract;
     executorWallet;
     homoraBankContract;
     defaultingAccounts;
@@ -120,11 +122,17 @@ class Liquidator {
             autosaveInterval: 4000 //Four seconds
         });
 
-        if (process.env.BUNDLE_EXECUTOR_ADDRESS  === undefined) {
+        await owner.provider._networkPromise;
+        if (owner.provider._network.chainId === 31337) {
             let FlashBotsMultiCall = await ethers.getContractFactory("FlashBotsMultiCall");
             this.bundleExecutorContract = await FlashBotsMultiCall.deploy(AAVE_LENDING_POOL_ADDRESS_PROVIDER,this.executorWallet.address);
             // this.BUNDLE_EXECUTOR_ADDRESS = this.bundleExecutorContract.address;
-            console.log("FlashBotsMultiCall deployed to:", this.bundleExecutorContract.address);
+            console.log("FlashBotsMultiCall deployed to: ", this.bundleExecutorContract.address);
+
+            const deploymentData = FlashBotsMultiCall.interface.encodeDeploy([AAVE_LENDING_POOL_ADDRESS_PROVIDER,this.executorWallet.address]);
+            const estimatedGas = await ethers.provider.estimateGas({ data: deploymentData });
+            console.log("took approx this much gas: " + estimatedGas);
+
         } else {
             // this.BUNDLE_EXECUTOR_ADDRESS = process.env.BUNDLE_EXECUTOR_ADDRESS;
             this.bundleExecutorContract = await ethers.getContractAt("FlashBotsMultiCall",process.env.BUNDLE_EXECUTOR_ADDRESS);
@@ -149,6 +157,7 @@ class Liquidator {
         
         const BASE_ORACLE_ADDRESS = await this.homoraOracleContract.source();
         this.homoraBaseOracleContract = await ethers.getContractAt("contracts\\TierProxyOracle.sol:IBaseOracle",BASE_ORACLE_ADDRESS);
+
     }
 
     async accrue(){
@@ -643,12 +652,18 @@ class Liquidator {
         let secondTokenOutLP;
         let amountInSwap;
         let amountOutSwap;
+        let outLPAmount = [];
+        let amountsInSwap = [];
         
         if (debtInWETH){
             //So this part is always going to be true because there are only ever two coins when WETH is one of the two. We just need to convert it to use arrays instead of numbers. TODO We are currently 
             priceRatioOT = secondTokenEntry.priceRatioOT;
-            debtTokenOutLP = bountyLPvalueNoOT.div(2).mul(LP_SLIPPAGE).div(1000);
-            secondTokenOutLP = bountyLPvalueNoOT.mul(ONE_TWELVE).div(2).div(priceRatioOT).mul(LP_SLIPPAGE).div(1000);
+            //ETH value of the debt token that will come out of the LP burn. aka debtTokenOutLP
+            outLPAmount[0] = bountyLPvalueNoOT.div(2).mul(LP_SLIPPAGE).div(1000);
+            //secondTokenOutLP
+            outLPAmount[1] = bountyLPvalueNoOT.mul(ONE_TWELVE).div(2).div(priceRatioOT).mul(LP_SLIPPAGE).div(1000);
+            // debtTokenOutLP = ;
+            // secondTokenOutLP = 
             amountInSwap = secondTokenOutLP; //This will leave some amount of residue, assuming that we don't hit that max slippage. This may not be a bad thing but we should consider being able to make this swap again later. 
             amountOutSwap = debtTokenOutLP.mul(SWAP_SLIPPAGE).div(1000);//5444444444
         } else {

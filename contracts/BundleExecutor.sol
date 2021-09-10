@@ -70,12 +70,12 @@ contract FlashBotsMultiCall  is FlashLoanReceiverBase, ERC1155Holder  {
         uint masterChefID;
         uint LPBounty;
         address LPtokenAddress;
-        uint otherTokenOutLP;
-        uint debtTokenOutLP;
+        uint[] lpAmountsOut;
         uint amountInSwap;
         uint amountOutSwap;
         uint deadline;
         address secondTokenAddress;
+        address thirdTokenAddress;
     }
 
 
@@ -153,14 +153,13 @@ contract FlashBotsMultiCall  is FlashLoanReceiverBase, ERC1155Holder  {
 
         FlashInfo memory flashInfo;
         {
-            (uint positionID, uint masterChefID, uint LPBounty, address LPtokenAddress, uint otherTokenOutLP, uint debtTokenOutLP, uint amountInSwap, uint amountOutSwap, uint deadline, address secondTokenAddress, address thirdTokenAddress) = abi.decode(params, (uint,uint,uint,address,uint,uint,uint,uint,uint,address,address));
+            (uint positionID, uint masterChefID, uint LPBounty, address LPtokenAddress, uint[] memory lpAmountsOut, uint amountInSwap, uint amountOutSwap, uint deadline, address secondTokenAddress, address thirdTokenAddress) = abi.decode(params, (uint,uint,uint,address,uint[],uint,uint,uint,address,address));
 
             flashInfo.positionID = positionID;
             flashInfo.masterChefID = masterChefID;
             flashInfo.LPBounty = LPBounty;
             flashInfo.LPtokenAddress = LPtokenAddress;
-            flashInfo.otherTokenOutLP = otherTokenOutLP;
-            flashInfo.debtTokenOutLP = debtTokenOutLP;
+            flashInfo.lpAmountsOut = lpAmountsOut;
             flashInfo.amountInSwap = amountInSwap;
             flashInfo.amountOutSwap = amountOutSwap;
             flashInfo.deadline = deadline;
@@ -220,8 +219,8 @@ contract FlashBotsMultiCall  is FlashLoanReceiverBase, ERC1155Holder  {
           underlying,
           flashInfo.secondTokenAddress,
           flashInfo.LPBounty,
-          flashInfo.debtTokenOutLP,
-          flashInfo.otherTokenOutLP,
+          flashInfo.lpAmountsOut[0],//debtTokenOutLP
+          flashInfo.lpAmountsOut[1],//otherTokenOutLP,
           initiator,
           deadline
         );
