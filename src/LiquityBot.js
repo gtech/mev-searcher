@@ -86,7 +86,7 @@ class LiquityBot {
                 latestBalance = await this.executorWallet.getBalance();
                 console.log("We made " + formatEther(latestBalance.sub(originalBalance)) + " ETH!");
                 theoreticalLiquidationBounty = BigNumber.from(0);
-                await sleep(5000);
+                await sleep(14000);
             }
         }
      }
