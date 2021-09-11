@@ -56,7 +56,7 @@ class Liquidator {
     // private flashLoaner: Flashloaner;
     // readonly PRIVATE_KEY;
     // readonly BUNDLE_EXECUTOR_ADDRESS;
-    flashbotsProvider;
+    flashBotsSender;
     bundleExecutorContract;
     liquityLiquidatorContract;
     executorWallet;
@@ -79,9 +79,9 @@ class Liquidator {
     werc20Info;
     pricing;
 
-    constructor(flashbotsProvider) {
+    constructor(flashBotsSender) {
         // this.executorWallet = executorWallet;        
-        this.flashbotsProvider = flashbotsProvider;
+        this.flashBotsSender = flashBotsSender;
         this.defaultingAccounts = [];
         this.NAIVE_ACCOUNTS = [899,897,456,948,992];//All of these are on sushiswap
         // this.bundleExecutorContract = bundleExecutorContract;
@@ -959,16 +959,16 @@ class Liquidator {
             }
           ];
           console.log(bundledTransactions)
-          const signedBundle = await this.flashbotsProvider.signBundle(bundledTransactions)
+          const signedBundle = await this.flashBotsSender.signBundle(bundledTransactions)
           //
-          const simulation = await this.flashbotsProvider.simulate(signedBundle, blockNumber + 1 )
+          const simulation = await this.flashBotsSender.simulate(signedBundle, blockNumber + 1 )
           if ("error" in simulation || simulation.firstRevert !== undefined) {
             console.log(`Simulation Error, skipping`)
             return;
           }
           console.log(`Submitting bundle, profit sent to miner: ${bigNumberToDecimal(simulation.coinbaseDiff)}, effective gas price: ${bigNumberToDecimal(simulation.coinbaseDiff.div(simulation.totalGasUsed), 9)} GWEI`)
           const bundlePromises =  _.map([blockNumber + 1, blockNumber + 2], targetBlockNumber =>
-            this.flashbotsProvider.sendRawBundle(
+            this.flashBotsSender.sendRawBundle(
               signedBundle,
               targetBlockNumber
             ))
@@ -1000,16 +1000,16 @@ class Liquidator {
             }
         ];
         console.log(bundledTransactions)
-        const signedBundle = await this.flashbotsProvider.signBundle(bundledTransactions)
+        const signedBundle = await this.flashBotsSender.signBundle(bundledTransactions)
         //
-        const simulation = await this.flashbotsProvider.simulate(signedBundle, blockNumber + 1 )
+        const simulation = await this.flashBotsSender.simulate(signedBundle, blockNumber + 1 )
         if ("error" in simulation || simulation.firstRevert !== undefined) {
             console.log(`Simulation Error on ${transaction}`)
             return
         }
         console.log(`Submitting bundle, profit sent to miner: ${bigNumberToDecimal(simulation.coinbaseDiff)}, effective gas price: ${bigNumberToDecimal(simulation.coinbaseDiff.div(simulation.totalGasUsed), 9)} GWEI`)
         const bundlePromises =  _.map([blockNumber + 1, blockNumber + 2], targetBlockNumber =>
-            this.flashbotsProvider.sendRawBundle(
+            this.flashBotsSender.sendRawBundle(
             signedBundle,
             targetBlockNumber
         ))

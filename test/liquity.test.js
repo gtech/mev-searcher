@@ -12,8 +12,6 @@ const { Liquidator } = require ( "../src/LiquityBot");
 const { Environment } = require ( "../src/Environment");
 const { formatEther } = require ( "@ethersproject/units");
 
-// const hre = require("hardhat");
-
 const ERC20ABI = [
   'function balanceOf(address) external view returns (uint)',
   'function transfer(address, uint) external returns (bool)',
@@ -28,14 +26,8 @@ describe("LiquityBot", function(){
     environment = new Environment();
     await environment.initialize();
     liqBot = await environment.createLiquityBot();
-
-    const ethBalanceBeforeLiquidation = await liqBot.executorWallet.getBalance();
     await liqBot.liquidateTroves();
 
-    const ethBalanceAfterLiquidation = await liqBot.executorWallet.getBalance();
-
-    const profit = ethBalanceAfterLiquidation.sub(ethBalanceBeforeLiquidation);
-    console.log("We made this much ETH: " + formatEther(profit));
     // expect(profit.gt(0.2)).to.be.true();
 
     // await historicalWalk(environment,liq, 2387);

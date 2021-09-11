@@ -13,6 +13,7 @@ const { ProviderConnectInfo } = require("hardhat/types/provider");
 const { Liquidator } = require("./Liquidator");
 const { LiquityBot } = require("./LiquityBot");
 const dotenv = require('dotenv');
+const { FlashBotsSender } = require('./FlashBotsSender')
 
 class Environment {
     ETHEREUM_RPC_URL;
@@ -20,10 +21,10 @@ class Environment {
     MINER_REWARD_PERCENTAGE;
     HEALTHCHECK_URL;
     provider;
-    // private normalSigningWallet : Wallet;
     flashbotsRelaySigningWallet;
     flashbotsProvider;
     liquidators;
+    flashBotsSender;
 
     constructor() {
         dotenv.config();
@@ -36,32 +37,44 @@ class Environment {
 
         this.HEALTHCHECK_URL = process.env.HEALTHCHECK_URL || ""
 
+        //TODO Fix this shit
         this.provider = new providers.StaticJsonRpcProvider(this.ETHEREUM_RPC_URL);
 
         // this.normalSigningWallet = new Wallet(this.PRIVATE_KEY);
+        //TODO For some reason this thing cannot sign.
         this.flashbotsRelaySigningWallet = new Wallet(this.FLASHBOTS_RELAY_SIGNING_KEY);
         
     }
 
     async initialize(){
-        // console.log("Searcher Wallet Address: " + await this.normalSigningWallet.getAddress())
         console.log("Flashbots Relay Signing Wallet Address: " + await this.flashbotsRelaySigningWallet.getAddress())
 
-        this.flashbotsProvider = await FlashbotsBundleProvider.create(
-            this.provider,
-            this.flashbotsRelaySigningWallet
-        );
+        if(process.env.NETWORK == "GOERLI"){
+            this.flashbotsProvider = await FlashbotsBundleProvider.create(
+                this.provider,
+                this.flashbotsRelaySigningWallet,
+                "https://relay-goerli.flashbots.net",
+                "goerli"
+            );
+        } else { 
+            this.flashbotsProvider = await FlashbotsBundleProvider.create(
+                this.provider,
+                this.flashbotsRelaySigningWallet
+            );
+        }
+
+        this.flashBotsSender = new FlashBotsSender(this.flashbotsProvider);
     }
 
     async createLiquidator(){
-        let liquidator = new Liquidator(this.flashbotsProvider);
+        let liquidator = new Liquidator(this.flashBotsSender);
         await liquidator.initialize();
         this.liquidators.push(liquidator);
         return liquidator;
     }
 
     async createLiquityBot(){
-        let liquidator = new LiquityBot(this.flashbotsProvider);
+        let liquidator = new LiquityBot(this.flashBotsSender);
         await liquidator.initialize();
         this.liquidators.push(liquidator);
         return liquidator;
