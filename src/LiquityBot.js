@@ -88,15 +88,16 @@ class LiquityBot {
                     numberOfTroves = NUMBER_OF_TROVES_TO_LIQUIDATE;
 
                     // await this.liquityLiquidatorContract.withdrawErc20(LUSD);
+                    latestBalance = await this.executorWallet.getBalance();
+                    console.log(getTimestamp() + " We made " + formatEther(latestBalance.sub(originalBalance)) + " ETH!");
+                    await sleep(5000);
                 } catch (error) {
                     //Some unexpected error.
                     console.log(getTimestamp() + " LIVE ERROR: " + error);
                     continue;
                 }
-                latestBalance = await this.executorWallet.getBalance();
-                console.log(getTimestamp() + " We made " + formatEther(latestBalance.sub(originalBalance)) + " ETH!");
+                
                 theoreticalLiquidationBounty = BigNumber.from(0);
-                await sleep(14000);
             }
         }
      }
