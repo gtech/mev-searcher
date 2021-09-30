@@ -849,7 +849,6 @@ class Liquidator {
         this.updateDatabasesLoop();
         while(true){
             await new Promise(resolve => setTimeout(resolve, 1000 * 60 * 60 * 24)); //sleep a day
-            //TODO sleep here? Figure out how to safely wait for the async functions to continue their work.
         }
     }
 

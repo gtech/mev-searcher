@@ -28,6 +28,8 @@ describe("LiquityBot", function(){
     liqBot = await environment.createLiquityBot();
     await liqBot.liquidateTroves();
 
+    
+
     // expect(profit.gt(0.2)).to.be.true();
 
     // await historicalWalk(environment,liq, 2387);

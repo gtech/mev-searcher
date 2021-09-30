@@ -8,7 +8,7 @@ const { on } = require("events");
 const { hrtime } = require("process");
 const loki = require('lokijs');
 
-const NUMBER_OF_TROVES_TO_LIQUIDATE = 90;
+const NUMBER_OF_TROVES_TO_LIQUIDATE = 30;
 const NO_LIQUIDATIONS = "VM Exception while processing transaction: reverted with reason string 'TroveManager: nothing to liquidate'";
 const LUSD = "0x5f98805A4E8be255a32880FDeC7F6728C6568bA0";
 const NOT_DEPLOYED_ON_MAINNET = false;
@@ -46,24 +46,33 @@ class LiquityBot {
         }
     }
 
+
     async liquidateTroves(){
         let originalBalance = await this.executorWallet.getBalance();
         let latestBalance;
         let theoreticalLiquidationBounty;
         let liquidationTransaction;
+        let numberOfTroves = NUMBER_OF_TROVES_TO_LIQUIDATE;
         while(true){
             try {
-                theoreticalLiquidationBounty = await this.liquityLiquidatorContract.callStatic.liquidateTroves(this.MINER_PERCENTAGE,NUMBER_OF_TROVES_TO_LIQUIDATE);
+                theoreticalLiquidationBounty = await this.liquityLiquidatorContract.callStatic.liquidateTroves(this.MINER_PERCENTAGE,numberOfTroves);
             } catch (error) {
                 if (error.message == NO_LIQUIDATIONS || error.message.includes("cannot estimate gas")){
                     //We just figured out there are no liquidations ready.
-                    console.log("No defaulting troves or gas exception, trying again.")
+                    // console.log("No defaulting troves or gas exception, trying again.")
                     await sleep(5000);
                     continue;
                 }
                 //Some unexpected error.
-                console.log("ERROR: " + error);
-                await sleep(5000);
+                console.log(getTimestamp() + " EMULATION ERROR: " + error);
+                // await sleep(5000);
+                if (error.message.includes("Request timed out.")){
+                    numberOfTroves = Math.floor(numberOfTroves/2);
+                    if(numberOfTroves == 0){
+                        numberOfTroves = NUMBER_OF_TROVES_TO_LIQUIDATE;
+                    }
+                    console.log("number of troves we're trying to liquidate " + numberOfTroves);
+                }
                 continue;
             }
             if (formatEther(theoreticalLiquidationBounty) > this.THRESHHOLD_FOR_LIQUIDATION){
@@ -71,25 +80,33 @@ class LiquityBot {
                     //TODO We need to consolidate all of my switches because this is getting ridiculous.
                     //TODO Move as much of this code into the flashbots part as possible.
                     
-                    liquidationTransaction = await this.liquityLiquidatorContract.populateTransaction.liquidateTroves(this.MINER_PERCENTAGE,NUMBER_OF_TROVES_TO_LIQUIDATE,{
+                    liquidationTransaction = await this.liquityLiquidatorContract.populateTransaction.liquidateTroves(this.MINER_PERCENTAGE,numberOfTroves,{
                         type: 2,
                         value: 0,
                     })
                     await this.flashbotsSender.sendIt(liquidationTransaction,this.liquityLiquidatorContract,this.executorWallet);
+                    numberOfTroves = NUMBER_OF_TROVES_TO_LIQUIDATE;
 
-                    await this.liquityLiquidatorContract.withdrawErc20(LUSD);
+                    // await this.liquityLiquidatorContract.withdrawErc20(LUSD);
                 } catch (error) {
                     //Some unexpected error.
-                    console.log("ERROR: " + error);
+                    console.log(getTimestamp() + " LIVE ERROR: " + error);
                     continue;
                 }
                 latestBalance = await this.executorWallet.getBalance();
-                console.log("We made " + formatEther(latestBalance.sub(originalBalance)) + " ETH!");
+                console.log(getTimestamp() + " We made " + formatEther(latestBalance.sub(originalBalance)) + " ETH!");
                 theoreticalLiquidationBounty = BigNumber.from(0);
                 await sleep(14000);
             }
         }
      }
+}
+
+function getTimestamp() {
+    const pad = (n,s=2) => (`${new Array(s).fill(0)}${n}`).slice(-s);
+    const d = new Date();
+    
+    return `${pad(d.getFullYear(),4)}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
 function sleep(ms) {
