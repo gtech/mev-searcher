@@ -2,11 +2,11 @@
 
 pragma solidity 0.6.12;
 
-import "../../interfaces/liquity/IActivePool.sol";
-import "../../interfaces/liquity/IDefaultPool.sol";
-import "../../interfaces/liquity/IPriceFeed.sol";
-import "../../interfaces/liquity/ILiquityBase.sol";
-import "../../libraries/BaseMath.sol";
+import "../interfaces/IActivePool.sol";
+import "../interfaces/IDefaultPool.sol";
+import "../interfaces/IPriceFeed.sol";
+import "../interfaces/ILiquityBase.sol";
+import "../../../libraries/BaseMath.sol";
 import "./LiquityMath.sol";
 
 /* 

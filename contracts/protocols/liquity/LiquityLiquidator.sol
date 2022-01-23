@@ -1,9 +1,9 @@
 //SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.6.12;
 
-import "../libraries/SafeMath.sol";
-import "../interfaces/liquity/ITroveManager.sol";
-import "../interfaces/IERC20.sol";
+import "./interfaces/ITroveManager.sol";
+import "../../libraries/SafeMath.sol";
+import "../../interfaces/IERC20.sol";
 
 pragma experimental ABIEncoderV2;
 

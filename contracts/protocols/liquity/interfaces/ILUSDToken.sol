@@ -2,8 +2,8 @@
 
 pragma solidity 0.6.12;
 
-import "../IERC20.sol";
-import "../IERC2612.sol";
+import "../../../interfaces/IERC20.sol";
+import "../../../interfaces/IERC2612.sol";
 
 interface ILUSDToken is IERC20, IERC2612 { 
     
