@@ -23,12 +23,13 @@ describe("LiquityBot", function(){
 
   it("should make some ether", async function(){
     this.timeout(0);
+
     environment = new Environment();
     await environment.initialize();
+
     liqBot = await environment.createLiquityBot();
     await liqBot.liquidateTroves();
 
-    
 
     // expect(profit.gt(0.2)).to.be.true();
 

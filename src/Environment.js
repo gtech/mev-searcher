@@ -27,28 +27,28 @@ class Environment {
     flashBotsSender;
 
     constructor() {
+        // Load environment variables
         dotenv.config();
+
         this.ETHEREUM_RPC_URL = process.env.ETHEREUM_RPC_URL || "http://127.0.0.1:8545";
-
-        this.FLASHBOTS_RELAY_SIGNING_KEY = process.env.FLASHBOTS_RELAY_SIGNING_KEY// || getDefaultRelaySigningKey();
-
+        this.FLASHBOTS_RELAY_SIGNING_KEY = process.env.FLASHBOTS_RELAY_SIGNING_KEY;
         this.MINER_REWARD_PERCENTAGE = parseInt(process.env.MINER_REWARD_PERCENTAGE || '1');
+
         this.liquidators = [];
 
         this.HEALTHCHECK_URL = process.env.HEALTHCHECK_URL || ""
 
-        //TODO Fix this shit
+        // TODO: Check me -> TODO: Fix this shit
         this.provider = new providers.StaticJsonRpcProvider(this.ETHEREUM_RPC_URL);
 
-        // this.normalSigningWallet = new Wallet(this.PRIVATE_KEY);
-        //TODO For some reason this thing cannot sign.
+        // TODO: Check me -> TODO: For some reason this thing cannot sign.
         this.flashbotsRelaySigningWallet = new Wallet(this.FLASHBOTS_RELAY_SIGNING_KEY);
-        
     }
 
     async initialize(){
         console.log("Flashbots Relay Signing Wallet Address: " + await this.flashbotsRelaySigningWallet.getAddress())
 
+        // Initialize the flashbotsProvider based off of the network current network
         if(process.env.NETWORK == "GOERLI"){
             this.flashbotsProvider = await FlashbotsBundleProvider.create(
                 this.provider,
@@ -63,6 +63,7 @@ class Environment {
             );
         }
 
+        // Create the flashBotsSender from the flashBotsProvider initialized above
         this.flashBotsSender = new FlashBotsSender(this.flashbotsProvider);
     }
 
@@ -73,20 +74,28 @@ class Environment {
         return liquidator;
     }
 
+    // Constructor for creating a new liquityBot
     async createLiquityBot(){
+        // Create the liquidator bot
         let liquidator = new LiquityBot(this.flashBotsSender);
+
+        // Initialize
         await liquidator.initialize();
+
+        // Add the bot to the liquidators list
         this.liquidators.push(liquidator);
+
+        // Return the newly created liquidator
         return liquidator;
     }
 
-    async forkBlock(blocknumber){ 
+    async forkBlock(blockNumber){
         await network.provider.request({
             method: "hardhat_reset",
             params: [{
               forking: {
                 jsonRpcUrl: "https://eth-mainnet.alchemyapi.io/v2/7iK_P5rb5W1o7oM97IQWboQ3oVLjVq8D",
-                blockNumber: blocknumber
+                blockNumber: blockNumber
               }
             }]
           })

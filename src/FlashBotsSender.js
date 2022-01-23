@@ -1,62 +1,101 @@
-const { FlashbotsBundleProvider } = require("@flashbots/ethers-provider-bundle");
-const { ethers } = require("hardhat");
-const { BigNumber } = require("ethers");
+const {FlashbotsBundleProvider} = require("@flashbots/ethers-provider-bundle");
+const {ethers} = require("hardhat");
+const {BigNumber} = require("ethers");
 const _ = require("lodash");
 
 
 class FlashBotsSender {
     flashbotsProvider;
 
-    constructor(flashbotsProvider){
+    constructor(flashbotsProvider) {
         this.flashbotsProvider = flashbotsProvider;
     }
 
-    async sendIt(transaction, mySmartContract, wallet){  
+    /*
+    transaction: the transaction to be executed
+    mySmartContract: the smart contract the transaction is run through
+    wallet: a wallet that is used to execute the transaction
+     */
+    async sendIt(transaction, mySmartContract, wallet) {
+        // Grab the latest block
         const block = await ethers.provider.getBlock("latest");
         const blockNumber = block.number;
-        try {       
-            const maxBaseFeeInFutureBlock = FlashbotsBundleProvider.getMaxBaseFeeInFutureBlock(block.baseFeePerGas, 1);
+
+        // Try to estimate the amount of gas required to execute the transaction
+        try {
+            // Calculate the base gas fee for the next block
+            const maxBaseFeeInFutureBlock = FlashbotsBundleProvider.getMaxBaseFeeInFutureBlock(
+                block.baseFeePerGas,
+                1
+            );
+
+            // Initialize the chainId and maxFeePerGas parameters
             transaction.chainId = wallet.provider._network.chainId;
             transaction.maxFeePerGas = maxBaseFeeInFutureBlock;
+
+            // Estimate the gas required to execute the corresponding transaction
             const estimateGas = await mySmartContract.provider.estimateGas(
-            {
-                ...transaction,
-                from: wallet.address
-            })
+                {
+                    ...transaction,
+                    from: wallet.address
+                }
+            )
+
+            // Max sure the gas is not super large
             if (estimateGas.gt(1400000)) {
                 console.log("EstimateGas succeeded, but suspiciously large: " + estimateGas.toString())
                 return
             }
+
+            // Set the gasLimit to be 2x the estimation
             transaction.gasLimit = estimateGas.mul(2);
         } catch (e) {
             console.warn(`Estimate gas failure for ${JSON.stringify(transaction)}`)
             return
         }
+
+        // Flashbots lets you order a series of transactions in a block. In this case, we are only bundling a single
+        // transaction
         const bundledTransactions = [
             {
-            signer: wallet,
-            transaction: transaction
+                signer: wallet,
+                transaction: transaction
             }
         ];
         console.log(bundledTransactions)
+
+        // Sign the transaction bundle with our flashbotsProvider account
         const signedBundle = await this.flashbotsProvider.signBundle(bundledTransactions)
-        const simulation = await this.flashbotsProvider.simulate(signedBundle, blockNumber + 1 )
+
+        // Simulate the transaction one last time to make sure the transaction is still valid and works
+        const simulation = await this.flashbotsProvider.simulate(signedBundle, blockNumber + 1)
         if ("error" in simulation || simulation.firstRevert !== undefined) {
             console.log(`Simulation Error on ${transaction}`)
             return
         }
+
         console.log(`Submitting bundle, profit sent to miner: ${bigNumberToDecimal(simulation.coinbaseDiff)}, effective gas price: ${bigNumberToDecimal(simulation.coinbaseDiff.div(simulation.totalGasUsed), 9)} GWEI`)
-        const bundlePromises =  _.map([blockNumber + 1, blockNumber + 2], targetBlockNumber =>
-            this.flashbotsProvider.sendRawBundle(
-            signedBundle,
-            targetBlockNumber
-        ))
+
+        // Try to execute the transaction in one of the next two blocks
+        const bundlePromises = _.map(
+            [blockNumber + 1, blockNumber + 2],
+            (targetBlockNumber) => {
+                this.flashbotsProvider.sendRawBundle(
+                    signedBundle,
+                    targetBlockNumber
+                )
+            }
+        )
+
+        // Wait for the promises to complete
         await Promise.all(bundlePromises)
+
+        // Return the execution responses
         return bundlePromises;
     }
 }
 
-function bigNumberToDecimal(value, base = 18){
+function bigNumberToDecimal(value, base = 18) {
     const divisor = BigNumber.from(10).pow(base)
     return value.mul(10000).div(divisor).toNumber() / 10000
 }

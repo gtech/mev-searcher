@@ -1,8 +1,3 @@
-
-
-
-}
-
 Tasks:
 Write out search algorithm. We want to launch an asynchronous function that monitors the price of the assets, and if it calculates that the share of the debt is greater than its collateral, then it sends out the txn to liquidate.  Query the price every 5s and then calculate the debt ratios of all the current positons. 
 So let's make one query that populates a database with each position. I think each position will have a list of how much of each asset it's borrowing, as well as the amount of the collateral token that they have. But I'll have to look at the contract logic. Well do we want to mimic its bitmap logic or convert it into our own? Mimicking could avoid silly errors, let's start with that and convert later if we want.
