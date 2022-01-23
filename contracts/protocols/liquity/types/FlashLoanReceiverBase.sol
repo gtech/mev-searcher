@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: agpl-3.0
 pragma solidity 0.6.12;
 
-import {IFlashLoanReceiver, ILendingPoolAddressesProvider, ILendingPool} from "../../../interfaces/Interfaces.sol";
+import "../interfaces/IFlashLoanReceiver.sol";
+import "../interfaces/ILendingPoolAddressesProvider.sol";
+import "../interfaces/ILendingPool.sol";
 
 import "../../../interfaces/IERC20.sol";
 import "../../../libraries/SafeERC20.sol";
