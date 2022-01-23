@@ -1,13 +1,11 @@
-const { Environment } = require ( "./Environment");
-
+const { Environment } = require ( "./environment");
 
 async function main(){
-    let environment;
-    let liqBot;
-    
-    environment = new Environment();
-    await environment.initialize();
-    liqBot = await environment.createLiquityBot();
+    // Create and initialize the environment
+    const environment = await (new Environment()).initialize();
+
+    // Create liquidity bot for liquity
+    const liqBot = await environment.createLiquityLiquidator();
     await liqBot.liquidateTroves();
 }
 

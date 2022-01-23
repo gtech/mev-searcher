@@ -1,0 +1,103 @@
+const {FlashbotsBundleProvider} = require("@flashbots/ethers-provider-bundle");
+const {providers, Wallet} = require("ethers");
+const {get} = require("https")
+require("@nomiclabs/hardhat-waffle");
+
+const {LiquityBot} = require("./liquidators/liquity");
+const {FlashBotsSender} = require('./utilities/flashBotsSender');
+const {env} = require('./utilities/env');
+
+class Environment {
+    // Const
+    ETHEREUM_RPC_URL;
+    FLASHBOTS_RELAY_SIGNING_KEY;
+    MINER_REWARD_PERCENTAGE;
+    HEALTH_CHECK_URL;
+
+    provider;
+    flashbotsRelaySigningWallet;
+    flashbotsProvider;
+    liquidators;
+    flashBotsSender;
+
+    constructor() {
+        // Load environment variables
+        dotenv.config();
+
+        // Define constants
+        this.ETHEREUM_RPC_URL = env.ETHEREUM_RPC_URL;
+        this.FLASHBOTS_RELAY_SIGNING_KEY = env.FLASHBOTS_RELAY_SIGNING_KEY;
+        this.MINER_REWARD_PERCENTAGE = env.MINER_REWARD_PERCENTAGE;
+        this.HEALTH_CHECK_URL = env.HEALTH_CHECK_URL;
+
+        this.liquidators = [];
+
+        // TODO: Check me -> TODO: Fix this shit
+        this.provider = new providers.StaticJsonRpcProvider(this.ETHEREUM_RPC_URL);
+
+        // TODO: Check me -> TODO: For some reason this thing cannot sign.
+        this.flashbotsRelaySigningWallet = new Wallet(this.FLASHBOTS_RELAY_SIGNING_KEY);
+    }
+
+    async initialize() {
+        console.log("Flashbots Relay Signing Wallet Address: " + await this.flashbotsRelaySigningWallet.getAddress())
+
+        // Initialize the flashbotsProvider based off of the network current network
+        if (env.NETWORK === "GOERLI") {
+            this.flashbotsProvider = await FlashbotsBundleProvider.create(
+                this.provider,
+                this.flashbotsRelaySigningWallet,
+                "https://relay-goerli.flashbots.net",
+                "goerli"
+            );
+        } else {
+            this.flashbotsProvider = await FlashbotsBundleProvider.create(
+                this.provider,
+                this.flashbotsRelaySigningWallet
+            );
+        }
+
+        // Create the flashBotsSender from the flashBotsProvider initialized above
+        this.flashBotsSender = new FlashBotsSender(this.flashbotsProvider);
+    }
+
+    // TODO: Add me
+    // // Constructor for creating a new liquidator bot for the Alpha Homora protocol
+    // async createAlphaHomoraLiquidator() {
+    //     // Create the liquidator bot
+    //     let liquidator = new Liquidator(this.flashBotsSender);
+    //
+    //     // Initialize
+    //     await liquidator.initialize();
+    //
+    //     // Add the bot to the liquidators list
+    //     this.liquidators.push(liquidator);
+    //
+    //     // Return the newly created liquidator
+    //     return liquidator;
+    // }
+
+    // Constructor for creating a new liquidator bot for the liquity protocol
+    async createLiquityLiquidator() {
+        // Create the liquidator bot
+        let liquidator = new LiquityBot(this.flashBotsSender);
+
+        // Initialize
+        await liquidator.initialize();
+
+        // Add the bot to the liquidators list
+        this.liquidators.push(liquidator);
+
+        // Return the newly created liquidator
+        return liquidator;
+    }
+
+    // Basic health check
+    healthCheck() {
+        if (this.HEALTH_CHECK_URL !== "") {
+            get(this.HEALTH_CHECK_URL).on('error', console.error);
+        }
+    }
+}
+
+module.exports.Environment = Environment;

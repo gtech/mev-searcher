@@ -1,44 +1,34 @@
+const {formatEther} = require("@ethersproject/units");
+const {BigNumber, Wallet} = require("ethers");
+const {ethers} = require("hardhat");
 const _ = require("lodash");
-const {ethers, network} = require("hardhat");
-const {
-    BigNumber,
-    Contract,
-    ContractFactory,
-    PopulatedTransaction,
-    Wallet,
-    providers,
-    Signer,
-    ContractTransaction
-} = require("ethers");
 require("@nomiclabs/hardhat-waffle");
-const {SignerWithAddress} = require("@nomiclabs/hardhat-ethers/signers");
-const {formatEther, formatUnits} = require("@ethersproject/units");
-const {on} = require("events");
-const {hrtime} = require("process");
-const loki = require('lokijs');
+const {env} = require("../constants/env");
+const { getTimestamp, sleep } = require("./utils");
 
 const NUMBER_OF_TROVES_TO_LIQUIDATE = 30;
 const NO_LIQUIDATIONS = "VM Exception while processing transaction: reverted with reason string 'TroveManager: nothing to liquidate'";
 const LUSD = "0x5f98805A4E8be255a32880FDeC7F6728C6568bA0";
 const NOT_DEPLOYED_ON_MAINNET = false;
 
-class LiquityBot {
+class Liquity {
+    MINER_PERCENTAGE;
+    THRESHOLD_FOR_LIQUIDATION;
+
     flashbotsSender;
     liquityLiquidatorContract;
     executorWallet;
-    MINER_PERCENTAGE;
-    THRESHOLD_FOR_LIQUIDATION;
 
 
     constructor(flashbotsSender) {
         this.flashbotsSender = flashbotsSender;
-        this.MINER_PERCENTAGE = parseInt(process.env.MINER_PERCENTAGE);
-        this.THRESHOLD_FOR_LIQUIDATION = parseFloat(process.env.THRESHHOLD_FOR_LIQUIDATION);
+        this.MINER_PERCENTAGE = env.MINER_PERCENTAGE;
+        this.THRESHOLD_FOR_LIQUIDATION = env.THRESH_HOLD_FOR_LIQUIDATION;
     }
 
     async initialize() {
         const [owner] = await ethers.getSigners();
-        this.executorWallet = new Wallet(process.env.PRIVATE_KEY, ethers.provider);
+        this.executorWallet = new Wallet(env.PRIVATE_KEY, ethers.provider);
 
         await owner.provider._networkPromise;
         let LiquityLiquidator = await ethers.getContractFactory("LiquityLiquidator");
@@ -60,7 +50,7 @@ class LiquityBot {
             // Set
             this.liquityLiquidatorContract = await ethers.getContractAt(
                 "LiquityLiquidator",
-                process.env.LIQUITY_LIQUIDATOR_ADDRESS
+                env.LIQUITY_LIQUIDATOR_ADDRESS
             );
         }
     }
@@ -68,11 +58,10 @@ class LiquityBot {
 
     async liquidateTroves() {
         let originalBalance = await this.executorWallet.getBalance();
-        let latestBalance;
-        let theoreticalLiquidationBounty;
-        let liquidationTransaction;
         let numberOfTroves = NUMBER_OF_TROVES_TO_LIQUIDATE;
+
         while (true) {
+            let theoreticalLiquidationBounty;
             try {
                 // Run the liquidateTroves function using the callStatic parameter to test and verify the contract, as
                 // well as calculate the bounty received from the liquidation
@@ -110,7 +99,7 @@ class LiquityBot {
                     //TODO We need to consolidate all of my switches because this is getting ridiculous.
 
                     // Build the transaction information for the liquidateTroves function
-                    liquidationTransaction = await this.liquityLiquidatorContract.populateTransaction.liquidateTroves(
+                    const liquidationTransaction = await this.liquityLiquidatorContract.populateTransaction.liquidateTroves(
                         this.MINER_PERCENTAGE,
                         numberOfTroves,
                         {
@@ -128,7 +117,7 @@ class LiquityBot {
                     numberOfTroves = NUMBER_OF_TROVES_TO_LIQUIDATE;
 
                     // Grab the balance of the wallet
-                    latestBalance = await this.executorWallet.getBalance();
+                    const latestBalance = await this.executorWallet.getBalance();
 
                     // Log the profit :)
                     console.log(getTimestamp() + " We made " + formatEther(latestBalance.sub(originalBalance)) + " ETH!");
@@ -148,15 +137,4 @@ class LiquityBot {
     }
 }
 
-function getTimestamp() {
-    const pad = (n, s = 2) => (`${new Array(s).fill(0)}${n}`).slice(-s);
-    const d = new Date();
-
-    return `${pad(d.getFullYear(), 4)}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-}
-
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-module.exports.LiquityBot = LiquityBot;
+module.exports.LiquityBot = Liquity;

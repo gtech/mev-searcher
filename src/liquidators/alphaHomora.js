@@ -4,7 +4,7 @@ const { BigNumber, Contract, ContractFactory, PopulatedTransaction, Wallet, prov
 require("@nomiclabs/hardhat-waffle");
 const { FlashbotsBundleProvider } = require("@flashbots/ethers-provider-bundle");
 const { SignerWithAddress } = require("@nomiclabs/hardhat-ethers/signers");
-const { ALPHA_HOMORA_CTOKENS, BANK_TOKENS, WETH_ADDRESS, TOKENS_TO_CTOKENS } = require("./addresses.js");
+const { ALPHA_HOMORA_CTOKENS, BANK_TOKENS, WETH_ADDRESS, TOKENS_TO_CTOKENS } = require("../constants/addresses.js");
 const { formatEther, formatUnits } = require("@ethersproject/units");
 const { ChainId, Token, WETH, Fetcher, Trade, Route, TokenAmount, TradeType, Percent } = require('@uniswap/sdk')
 const { on } = require("events");
@@ -52,7 +52,7 @@ const LIQUITY_ADDRESS = "0xA39739EF8b0231DbFA0DcdA07d7e29faAbCf4bb2";
 //     debtShareOf : object          //mapping(address => uint) debtShareOf; // The debt share for each token.
 //   }
 
-class Liquidator {
+class AlphaHomora {
     // private flashLoaner: Flashloaner;
     // readonly PRIVATE_KEY;
     // readonly BUNDLE_EXECUTOR_ADDRESS;
@@ -1065,7 +1065,7 @@ function removeA(arr) {
     return arr;
 }
 
-module.exports.Liquidator = Liquidator;
+module.exports.Liquidator = AlphaHomora;
 
 // export class Flashloaner{
 //     //So I think I want this thing to take in a token and an amount, then return a transaction to be bundled.

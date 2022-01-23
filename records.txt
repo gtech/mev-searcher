@@ -29,7 +29,7 @@ ExecutorContract:
   Take flashloan and get called back by C.R.E.A.M. finance
   Liquidate the position
   Pay back the flashloan.
-Liquidator:
+AlphaHomora:
   Will scan for liquidateable positions.
   Will figure out what LP I'm being paid in.
   Will figure out what token I will need to pay off the position with.

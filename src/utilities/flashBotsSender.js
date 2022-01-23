@@ -1,7 +1,8 @@
 const {FlashbotsBundleProvider} = require("@flashbots/ethers-provider-bundle");
-const {ethers} = require("hardhat");
 const {BigNumber} = require("ethers");
+const {ethers} = require("hardhat");
 const _ = require("lodash");
+const { bigNumberToDecimal } = require("./utils");
 
 
 class FlashBotsSender {
@@ -11,12 +12,14 @@ class FlashBotsSender {
         this.flashbotsProvider = flashbotsProvider;
     }
 
-    /*
-    transaction: the transaction to be executed
-    mySmartContract: the smart contract the transaction is run through
-    wallet: a wallet that is used to execute the transaction
+    /**
+     *
+     * @param {transaction} transaction transaction details for the contract
+     * @param {contract} contract the smart contract the transaction is run through
+     * @param {wallet} address a wallet that is used to execute the transaction
+     * @returns {transactionPromise[]} the awaited transaction promises used to execute the transaction
      */
-    async sendIt(transaction, mySmartContract, wallet) {
+    async sendIt(transaction, contract, wallet) {
         // Grab the latest block
         const block = await ethers.provider.getBlock("latest");
         const blockNumber = block.number;
@@ -34,7 +37,7 @@ class FlashBotsSender {
             transaction.maxFeePerGas = maxBaseFeeInFutureBlock;
 
             // Estimate the gas required to execute the corresponding transaction
-            const estimateGas = await mySmartContract.provider.estimateGas(
+            const estimateGas = await contract.provider.estimateGas(
                 {
                     ...transaction,
                     from: wallet.address
@@ -93,11 +96,6 @@ class FlashBotsSender {
         // Return the execution responses
         return bundlePromises;
     }
-}
-
-function bigNumberToDecimal(value, base = 18) {
-    const divisor = BigNumber.from(10).pow(base)
-    return value.mul(10000).div(divisor).toNumber() / 10000
 }
 
 module.exports.FlashBotsSender = FlashBotsSender;
