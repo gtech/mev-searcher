@@ -6,10 +6,10 @@ const { ethers, network } = require("hardhat");
 const { Signer, Contract, ContractFactory } = require ( "ethers");
 require("@nomiclabs/hardhat-waffle");
 const { expect,should } = require ( "chai");
-const addresses = require ( "../src/constants/addresses");
-const { CToken } = require ( "../src/constants/addresses");
-const { Liquidator } = require ( "../src/liquidators/alphaHomora");
-const { Environment } = require ( "../src/environment");
+const addresses = require ( "../../src/constants/addresses");
+const { CToken } = require ( "../../src/constants/addresses");
+const { Liquidator } = require ( "../../src/liquidators/alphaHomora");
+const { Environment } = require ( "../../src/environment");
 const { formatEther } = require ( "@ethersproject/units");
 
 // const hre = require("hardhat");

@@ -2,7 +2,7 @@ const { ethers, network } = require("hardhat");
 const { Signer, Contract, ContractFactory } = require ( "ethers");
 require("@nomiclabs/hardhat-waffle");
 const { expect,should } = require ( "chai");
-const { Environment } = require ( "../src/environment");
+const { Environment } = require ( "../../src/environment");
 
 const ERC20ABI = [
   'function balanceOf(address) external view returns (uint)',
