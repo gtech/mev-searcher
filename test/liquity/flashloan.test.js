@@ -42,61 +42,68 @@ describe("FlashBotsMultiCall Test", function () {
         // Check something...
     })
 
+    // Test a basic flash loan
     describe("flash loan", function () {
-        //
+        beforeEach(async function () {
+            // Add tokens to wallet to make sure the account has funds for gas
+        });
+
+        // Loan 1 eth
+        it.skip("1 eth loan", async function () {
+
+        });
     })
 
     it.skip("Should be able to get flashloans = require ( all the major tokens.", async function () {
-
-        addresses.ALPHA_HOMORA_CTOKENS.forEach(async (ctoken: CToken) => {
-            await network.provider.request({
-                method: "hardhat_impersonateAccount",
-                params: [ctoken.posessingAddress]
-            }).catch((err: Error) => {
-                console.log(err)
-            });
-            let possessingWallet = ethers.provider.getSigner(ctoken.posessingAddress);
-
-
-            // Send 100 of the token to flash loan example contract,
-            // so that you have enough fund to pay the fee.
-            let borrowedToken = new ethers.Contract(ctoken.underlyingAddress, ERC20ABI, possessingWallet);
-            let tx = await borrowedToken.transfer(flashBotsMultiCall.address, ctoken.decimal.mul(100)).catch((err: Error) => {
-                console.log("Could not transfer the token");
-                console.log(err)
-            }); //We want to push the limit of how much we borrow, so let's make a function that estimates how much we can borrow
-            await tx.wait();
-
-            await network.provider.request({
-                method: "hardhat_stopImpersonatingAccount",
-                params: [ctoken.posessingAddress]
-            });
-
-            await network.provider.request({
-                method: "hardhat_impersonateAccount",
-                params: deployer
-            });
-
-            console.log('contract:', flashBotsMultiCall.address);
-            // flashBotsMultiCall.address.should.be.a("string");
-            expect(1).to.equal(0);
-            // expect(flashBotsMultiCall.address).to.be.a("string");
-            // expect(flashBotsMultiCall.address).to.include("0x");
-
-
-            // call the doFlashloan
-            tx = await flashBotsMultiCall.doFlashloan(ctoken.address, ctoken.decimal.mul(1000));
-            const receipt = await tx.wait()
-            expect(receipt.status).to.equal(1);
-
-            // see the result
-            console.log(receipt.events);
-            console.log("status " + receipt.status);
-
-            await network.provider.request({
-                method: "hardhat_stopImpersonatingAccount",
-                params: deployer
-            });
-        })
+        // addresses.ALPHA_HOMORA_CTOKENS.forEach(async (ctoken: CToken) => {
+        //     await network.provider.request({
+        //         method: "hardhat_impersonateAccount",
+        //         params: [ctoken.posessingAddress]
+        //     }).catch((err: Error) => {
+        //         console.log(err)
+        //     });
+        //     let possessingWallet = ethers.provider.getSigner(ctoken.posessingAddress);
+        //
+        //
+        //     // Send 100 of the token to flash loan example contract,
+        //     // so that you have enough fund to pay the fee.
+        //     let borrowedToken = new ethers.Contract(ctoken.underlyingAddress, ERC20ABI, possessingWallet);
+        //     let tx = await borrowedToken.transfer(flashBotsMultiCall.address, ctoken.decimal.mul(100)).catch((err: Error) => {
+        //         console.log("Could not transfer the token");
+        //         console.log(err)
+        //     }); //We want to push the limit of how much we borrow, so let's make a function that estimates how much we can borrow
+        //     await tx.wait();
+        //
+        //     await network.provider.request({
+        //         method: "hardhat_stopImpersonatingAccount",
+        //         params: [ctoken.posessingAddress]
+        //     });
+        //
+        //     await network.provider.request({
+        //         method: "hardhat_impersonateAccount",
+        //         params: deployer
+        //     });
+        //
+        //     console.log('contract:', flashBotsMultiCall.address);
+        //     // flashBotsMultiCall.address.should.be.a("string");
+        //     expect(1).to.equal(0);
+        //     // expect(flashBotsMultiCall.address).to.be.a("string");
+        //     // expect(flashBotsMultiCall.address).to.include("0x");
+        //
+        //
+        //     // call the doFlashloan
+        //     tx = await flashBotsMultiCall.doFlashloan(ctoken.address, ctoken.decimal.mul(1000));
+        //     const receipt = await tx.wait()
+        //     expect(receipt.status).to.equal(1);
+        //
+        //     // see the result
+        //     console.log(receipt.events);
+        //     console.log("status " + receipt.status);
+        //
+        //     await network.provider.request({
+        //         method: "hardhat_stopImpersonatingAccount",
+        //         params: deployer
+        //     });
+        // })
     });
 });
