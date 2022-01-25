@@ -1,12 +1,12 @@
+require("@nomiclabs/hardhat-waffle");
 const {formatEther} = require("@ethersproject/units");
 const {BigNumber, Wallet} = require("ethers");
 const {ethers} = require("hardhat");
 const _ = require("lodash");
-require("@nomiclabs/hardhat-waffle");
-const {env} = require("../constants/env");
-const { getTimestamp, sleep } = require("./utils");
 
-const NUMBER_OF_TROVES_TO_LIQUIDATE = 30;
+const {env} = require("../constants/env");
+const {getTimestamp, sleep} = require("./utils");
+
 const NO_LIQUIDATIONS = "VM Exception while processing transaction: reverted with reason string 'TroveManager: nothing to liquidate'";
 const LUSD = "0x5f98805A4E8be255a32880FDeC7F6728C6568bA0";
 const NOT_DEPLOYED_ON_MAINNET = false;
@@ -14,6 +14,7 @@ const NOT_DEPLOYED_ON_MAINNET = false;
 class Liquity {
     MINER_PERCENTAGE;
     THRESHOLD_FOR_LIQUIDATION;
+    NUMBER_OF_TROVES_TO_LIQUIDATE;
 
     flashbotsSender;
     liquityLiquidatorContract;
@@ -21,9 +22,11 @@ class Liquity {
 
 
     constructor(flashbotsSender) {
-        this.flashbotsSender = flashbotsSender;
         this.MINER_PERCENTAGE = env.MINER_PERCENTAGE;
-        this.THRESHOLD_FOR_LIQUIDATION = env.THRESH_HOLD_FOR_LIQUIDATION;
+        this.THRESHOLD_FOR_LIQUIDATION = env.THRESHOLD_FOR_LIQUIDATION;
+        this.NUMBER_OF_TROVES_TO_LIQUIDATE = env.NUMBER_OF_TROVES_TO_LIQUIDATE;
+
+        this.flashbotsSender = flashbotsSender;
     }
 
     async initialize() {
@@ -57,8 +60,8 @@ class Liquity {
 
 
     async liquidateTroves() {
+        let numberOfTroves = this.NUMBER_OF_TROVES_TO_LIQUIDATE;
         let originalBalance = await this.executorWallet.getBalance();
-        let numberOfTroves = NUMBER_OF_TROVES_TO_LIQUIDATE;
 
         while (true) {
             let theoreticalLiquidationBounty;
@@ -86,7 +89,7 @@ class Liquity {
 
                     if (numberOfTroves === 0) {
                         numberOfTroves = 1;
-                        // numberOfTroves = NUMBER_OF_TROVES_TO_LIQUIDATE;
+                        // numberOfTroves = this.NUMBER_OF_TROVES_TO_LIQUIDATE;
                     }
                     console.log("number of troves we're trying to liquidate " + numberOfTroves);
                 }
@@ -114,7 +117,7 @@ class Liquity {
                         this.liquityLiquidatorContract,
                         this.executorWallet
                     );
-                    numberOfTroves = NUMBER_OF_TROVES_TO_LIQUIDATE;
+                    numberOfTroves = this.NUMBER_OF_TROVES_TO_LIQUIDATE;
 
                     // Grab the balance of the wallet
                     const latestBalance = await this.executorWallet.getBalance();
