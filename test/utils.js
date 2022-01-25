@@ -44,3 +44,11 @@ async function testAccrueEffect(liq ){
     // console.log(formatEther(await liq.findAccountValue(45)) + " Ether");
     // await liq.find_defaulting_accounts();
 }
+
+function parseBoolean(str) {
+    return str.toLowerCase() === "true" || str === "1"
+}
+
+module.exports = {
+    parseBoolean
+}

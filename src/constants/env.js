@@ -1,16 +1,62 @@
-const dotenv = require('dotenv');
-dotenv.config();
+const {parseBoolean} = require("../../test/utils");
+
+const {config: dotenvConfig} = require("dotenv");
+const {resolve} = require("path");
+
+dotenvConfig({path: resolve(__dirname, "./.env")});
+
+const {
+    HEALTH_CHECK_URL,
+
+    MINER_PERCENTAGE,
+    THRESH_HOLD_FOR_LIQUIDATION,
+
+    NETWORK,
+    NETWORK_FORK,
+
+    MAINNET_RPC_URL__LIVE,
+    MAINNET_RPC_URL__FORK,
+    MAINNET_CONTRACT_ADDRESS__LIQUITY_LIQUIDATOR,
+
+    GOERLI_RPC_URL__LIVE,
+    GOERLI_RPC_URL__FORK,
+    GOERLI_CONTRACT_ADDRESS__LIQUITY_LIQUIDATOR,
+
+    PRIVATE_KEY,
+    FLASHBOTS_RELAY_SIGNING_KEY
+} = process.env;
 
 module.exports = {
     env: {
-        ETHEREUM_RPC_URL: process.env.ETHEREUM_RPC_URL || "http://127.0.0.1:8545",
-        FLASHBOTS_RELAY_SIGNING_KEY: process.env.FLASHBOTS_RELAY_SIGNING_KEY,
-        MINER_REWARD_PERCENTAGE: parseInt(process.env.MINER_REWARD_PERCENTAGE || '1'),
-        HEALTH_CHECK_URL: process.env.HEALTHCHECK_URL || "",
-        NETWORK: process.env.NETWORK,
-        MINER_PERCENTAGE: process.env.MINER_PERCENTAGE,
-        THRESH_HOLD_FOR_LIQUIDATION: parseFloat(process.env.THRESH_HOLD_FOR_LIQUIDATION),
-        PRIVATE_KEY: process.env.PRIVATE_KEY,
-        LIQUITY_LIQUIDATOR_ADDRESS: process.env.LIQUITY_LIQUIDATOR_ADDRESS,
+        HEALTH_CHECK_URL: HEALTH_CHECK_URL || "",
+
+        MINER_REWARD_PERCENTAGE: parseInt(MINER_PERCENTAGE || '1'),
+        THRESH_HOLD_FOR_LIQUIDATION: parseInt(THRESH_HOLD_FOR_LIQUIDATION),
+
+        NETWORK,
+        NETWORK_FORK: parseBoolean(NETWORK_FORK),
+        ETHEREUM_RPC_URL: (
+            NETWORK === "MAINNET" ?
+                parseBoolean(NETWORK_FORK) ? MAINNET_RPC_URL__FORK : MAINNET_RPC_URL__LIVE
+                : NETWORK === "GOERLI" ?
+                    parseBoolean(NETWORK_FORK) ? GOERLI_RPC_URL__FORK : GOERLI_RPC_URL__LIVE
+                    : "UNDEF"
+        ),
+        FLASHBOTS_RELAY_SIGNING_KEY,
+
+        PRIVATE_KEY,
+
+        // Contract Addresses
+        CONTRACT_ADDRESS__LIQUITY_LIQUIDATOR: (
+            NETWORK === "MAINNET" ? MAINNET_CONTRACT_ADDRESS__LIQUITY_LIQUIDATOR
+                : NETWORK === "GOERLI" ? GOERLI_CONTRACT_ADDRESS__LIQUITY_LIQUIDATOR
+                    : "UNDEF"
+        ),
+
+        // Manually referencable networks
+        __MAINNET_RPC_URL__LIVE,
+        __MAINNET_RPC_URL__FORK,
+        __GOERLI_RPC_URL__LIVE,
+        __GOERLI_RPC_URL__FORK,
     }
 }

@@ -50,7 +50,7 @@ class Liquity {
             // Set
             this.liquityLiquidatorContract = await ethers.getContractAt(
                 "LiquityLiquidator",
-                env.LIQUITY_LIQUIDATOR_ADDRESS
+                env.CONTRACT_ADDRESS__LIQUITY_LIQUIDATOR
             );
         }
     }
