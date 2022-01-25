@@ -1,30 +1,51 @@
-const { ethers, network } = require("hardhat");
-const { Signer, Contract, ContractFactory } = require ( "ethers");
 require("@nomiclabs/hardhat-waffle");
-const { expect,should } = require ( "chai");
-const { Environment } = require ( "../../src/environment");
+const {expect, should} = require("chai");
+const {ethers, network} = require("hardhat");
+const {Environment} = require("../../src/environment");
+const {parseBoolean} = require("../../src/utilities/utils");
 
-const ERC20ABI = [
-  'function balanceOf(address) external view returns (uint)',
-  'function transfer(address, uint) external returns (bool)',
-]
+describe("Liquity Protocol Tests", function () {
+    let environment;
+    let liquidator;
 
-describe("LiquityBot", function(){
-  let environment;
-  let liqBot;
+    beforeEach(async function () {
+        // Set the timeout to 0 as the function loops on forever
+        this.timeout(0);
 
-  it("should make some ether", async function(){
-    this.timeout(0);
+        // Make sure we are using a test net / fork
+        expect(env.NETWORK === "MAINNET" && !parseBoolean(env.NETWORK_FORK)).to.be.equal(false);
 
-    environment = new Environment();
-    await environment.initialize();
+        // Create and initialize the environment parent class
+        environment = new Environment();
+        await environment.initialize()
 
-    liqBot = await environment.createLiquityLiquidator();
-    await liqBot.liquidateTroves();
+        liquidator = await environment.createLiquityLiquidator();
+    });
 
+    // Check liquity bot initialization
+    it("correctly constructs the liquity liquidator", async function () {
+        // Check something...
+    })
 
-    // expect(profit.gt(0.2)).to.be.true();
+    // Check that the liquidateTroves function can be closed once started
+    it("can close liquidateTroves() process", async function () {
+        // Check something...
+    })
 
-    // await historicalWalk(environment,liq, 2387);
-  })
+    describe("liquidate troves", function () {
+
+        it("should make some ether", async function () {
+            await liquidator.liquidateTroves();
+
+            // expect(profit.gt(0.2)).to.be.true();
+
+            // await historicalWalk(environment,liq, 2387);
+        })
+    })
+
+    // describe("", function () {
+    //     it("", function () {
+    //
+    //     })
+    // })
 });

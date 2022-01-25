@@ -45,10 +45,4 @@ async function testAccrueEffect(liq ){
     // await liq.find_defaulting_accounts();
 }
 
-function parseBoolean(str) {
-    return str.toLowerCase() === "true" || str === "1"
-}
-
-module.exports = {
-    parseBoolean
-}
+// module.exports = {}

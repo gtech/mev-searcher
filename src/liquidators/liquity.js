@@ -5,7 +5,7 @@ const {ethers} = require("hardhat");
 const _ = require("lodash");
 
 const {env} = require("../constants/env");
-const {getTimestamp, sleep} = require("./utils");
+const {getTimestamp, sleep} = require("../utilities/utils");
 
 const NO_LIQUIDATIONS = "VM Exception while processing transaction: reverted with reason string 'TroveManager: nothing to liquidate'";
 const LUSD = "0x5f98805A4E8be255a32880FDeC7F6728C6568bA0";
