@@ -1,5 +1,4 @@
 const {BigNumber, Wallet} = require("ethers");
-const {getTimestamp} = require("./utils");
 
 exports.ETHER = BigNumber.from(10).pow(18);
 
@@ -25,7 +24,10 @@ function logError(err) {
 }
 
 function parseBoolean(str) {
-    return str.toLowerCase() === "true" || str === "1"
+    if (str) {
+        return str.toLowerCase() === "true" || str === "1"
+    }
+    return false
 }
 
 function sleep(ms) {

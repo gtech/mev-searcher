@@ -42,6 +42,22 @@ describe("FlashBotsMultiCall Test", function () {
         // Check something...
     })
 
+    // Test a basic transaction
+    describe("basic transaction", function () {
+        beforeEach(async function () {
+            // Get the balance of the wallet
+            const deployer_balance = await deployer.getBalance()
+            console.log(deployer_balance)
+
+            // Add tokens to wallet to make sure the account has funds for gas
+        });
+
+        // Loan 1 eth
+        it.skip("1 eth loan", async function () {
+
+        });
+    })
+
     // Test a basic flash loan
     describe("flash loan", function () {
         beforeEach(async function () {

@@ -54,9 +54,9 @@ module.exports = {
         ),
 
         // Manually referencable networks
-        __MAINNET_RPC_URL__LIVE,
-        __MAINNET_RPC_URL__FORK,
-        __GOERLI_RPC_URL__LIVE,
-        __GOERLI_RPC_URL__FORK,
+        __MAINNET_RPC_URL__LIVE: MAINNET_RPC_URL__LIVE,
+        __MAINNET_RPC_URL__FORK: MAINNET_RPC_URL__FORK,
+        __GOERLI_RPC_URL__LIVE: GOERLI_RPC_URL__LIVE,
+        __GOERLI_RPC_URL__FORK: GOERLI_RPC_URL__FORK,
     }
 }

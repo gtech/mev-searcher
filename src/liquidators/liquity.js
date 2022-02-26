@@ -73,7 +73,7 @@ class Liquity {
                     numberOfTroves
                 );
             } catch (error) {
-                // If there are no liquidation than sleep for five seconds and try again
+                // If there are no liquidation, then sleep for five seconds and try again
                 if (error.message === NO_LIQUIDATIONS || error.message.includes("cannot estimate gas")) {
                     // We just figured out there are no liquidations ready.
                     await sleep(5000);

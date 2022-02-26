@@ -1,6 +1,8 @@
 require("@nomiclabs/hardhat-waffle");
 
-const {task} = require("hardhat");
+const env = require("./src/constants/env")
+
+// const {task} = require("hardhat");
 
 task("accounts", "Prints the list of accounts", async (args, hre) => {
   const accounts = await hre.ethers.getSigners();
