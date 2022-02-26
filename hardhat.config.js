@@ -1,6 +1,6 @@
 require("@nomiclabs/hardhat-waffle");
 
-const env = require("./src/constants/env")
+const { env } = require("./src/constants/env")
 
 // const {task} = require("hardhat");
 
