@@ -10,7 +10,7 @@
     "ethers": "^5.4.6",
     "hardhat": "^2.6.4"
   },
-  "description": "",
+  "description": "A liquidation bot....",
   "version": "1.0.0",
   "main": "hardhat.config.js",
   "directories": {
@@ -42,5 +42,6 @@
   "bugs": {
     "url": "https://github.com/gtech/mev-searcher/issues"
   },
-  "homepage": "https://github.com/gtech/mev-searcher#readme"
+  "homepage": "https://github.com/gtech/mev-searcher#readme",
+  "keywords": []
 }

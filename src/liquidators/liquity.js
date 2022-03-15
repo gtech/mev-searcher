@@ -1,10 +1,10 @@
 const {formatEther} = require("@ethersproject/units");
 const {BigNumber, Wallet} = require("ethers");
 const {ethers} = require("hardhat");
-const _ = require("lodash");
+// const _ = require("lodash");
 require("@nomiclabs/hardhat-waffle");
 const {env} = require("../constants/env");
-const { getTimestamp, sleep } = require("./utils");
+const { getTimestamp, sleep } = require("../utilities/utils");
 
 const NUMBER_OF_TROVES_TO_LIQUIDATE = 30;
 const NO_LIQUIDATIONS = "VM Exception while processing transaction: reverted with reason string 'TroveManager: nothing to liquidate'";
@@ -12,7 +12,7 @@ const LUSD = "0x5f98805A4E8be255a32880FDeC7F6728C6568bA0";
 const NOT_DEPLOYED_ON_MAINNET = false;
 
 class Liquity {
-    MINER_PERCENTAGE;
+    MINER_REWARD_PERCENTAGE;
     THRESHOLD_FOR_LIQUIDATION;
 
     flashbotsSender;
@@ -22,8 +22,8 @@ class Liquity {
 
     constructor(flashbotsSender) {
         this.flashbotsSender = flashbotsSender;
-        this.MINER_PERCENTAGE = env.MINER_PERCENTAGE;
-        this.THRESHOLD_FOR_LIQUIDATION = env.THRESH_HOLD_FOR_LIQUIDATION;
+        this.MINER_REWARD_PERCENTAGE = env.MINER_REWARD_PERCENTAGE;
+        this.THRESHOLD_FOR_LIQUIDATION = env.THRESHHOLD_FOR_LIQUIDATION;
     }
 
     async initialize() {
@@ -66,9 +66,10 @@ class Liquity {
                 // Run the liquidateTroves function using the callStatic parameter to test and verify the contract, as
                 // well as calculate the bounty received from the liquidation
                 theoreticalLiquidationBounty = await this.liquityLiquidatorContract.callStatic.liquidateTroves(
-                    this.MINER_PERCENTAGE,
+                    this.MINER_REWARD_PERCENTAGE,
                     numberOfTroves
                 );
+                await sleep(5000);
             } catch (error) {
                 // If there are no liquidation than sleep for five seconds and try again
                 if (error.message === NO_LIQUIDATIONS || error.message.includes("cannot estimate gas")) {
@@ -82,12 +83,6 @@ class Liquity {
 
                 // If the request failed to emulate, cut the number of troves in half and try again
                 if (error.message.includes("Request timed out.")) {
-                    numberOfTroves = Math.floor(numberOfTroves / 2);
-
-                    if (numberOfTroves === 0) {
-                        numberOfTroves = 1;
-                        // numberOfTroves = NUMBER_OF_TROVES_TO_LIQUIDATE;
-                    }
                     console.log("number of troves we're trying to liquidate " + numberOfTroves);
                 }
                 continue;
@@ -100,7 +95,7 @@ class Liquity {
 
                     // Build the transaction information for the liquidateTroves function
                     const liquidationTransaction = await this.liquityLiquidatorContract.populateTransaction.liquidateTroves(
-                        this.MINER_PERCENTAGE,
+                        this.MINER_REWARD_PERCENTAGE,
                         numberOfTroves,
                         {
                             type: 2,
@@ -109,6 +104,7 @@ class Liquity {
                     )
 
                     // execute the transaction on the main-net using flashbots
+                    //TODO Test this on goerli
                     await this.flashbotsSender.sendIt(
                         liquidationTransaction,
                         this.liquityLiquidatorContract,

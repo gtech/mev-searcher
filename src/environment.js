@@ -5,7 +5,7 @@ require("@nomiclabs/hardhat-waffle");
 
 const {LiquityBot} = require("./liquidators/liquity");
 const {FlashBotsSender} = require('./utilities/flashBotsSender');
-const {env} = require('./utilities/env');
+const {env} = require('./constants/env');
 
 class Environment {
     // Const
@@ -22,7 +22,7 @@ class Environment {
 
     constructor() {
         // Load environment variables
-        dotenv.config();
+        // dotenv.config();
 
         // Define constants
         this.ETHEREUM_RPC_URL = env.ETHEREUM_RPC_URL;
