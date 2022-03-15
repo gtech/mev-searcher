@@ -14,10 +14,10 @@ class FlashBotsSender {
 
     /**
      *
-     * @param {transaction} transaction transaction details for the contract
+     * @param {PopulatedTransaction} transaction transaction details for the contract
      * @param {contract} contract the smart contract the transaction is run through
      * @param {wallet} address a wallet that is used to execute the transaction
-     * @returns {transactionPromise[]} the awaited transaction promises used to execute the transaction
+     * @returns {async transactionPromise[]} the awaited transaction promises used to execute the transaction
      */
     async sendIt(transaction, contract, wallet) {
         // Grab the latest block
