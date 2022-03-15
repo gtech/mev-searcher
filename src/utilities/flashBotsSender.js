@@ -47,14 +47,15 @@ class FlashBotsSender {
             // Max sure the gas is not super large
             if (estimateGas.gt(1400000)) {
                 console.log("EstimateGas succeeded, but suspiciously large: " + estimateGas.toString())
-                return
+                return false;
             }
 
             // Set the gasLimit to be 2x the estimation
             transaction.gasLimit = estimateGas.mul(2);
         } catch (e) {
             console.warn(`Estimate gas failure for ${JSON.stringify(transaction)}`)
-            return
+            console.log(e);
+            return false;
         }
 
         // Flashbots lets you order a series of transactions in a block. In this case, we are only bundling a single
@@ -65,8 +66,6 @@ class FlashBotsSender {
                 transaction: transaction
             }
         ];
-        console.log(bundledTransactions)
-
         // Sign the transaction bundle with our flashbotsProvider account
         const signedBundle = await this.flashbotsProvider.signBundle(bundledTransactions)
 
@@ -74,7 +73,7 @@ class FlashBotsSender {
         const simulation = await this.flashbotsProvider.simulate(signedBundle, blockNumber + 1)
         if ("error" in simulation || simulation.firstRevert !== undefined) {
             console.log(`Simulation Error on ${transaction}`)
-            return
+            return false;
         }
 
         console.log(`Submitting bundle, profit sent to miner: ${bigNumberToDecimal(simulation.coinbaseDiff)}, effective gas price: ${bigNumberToDecimal(simulation.coinbaseDiff.div(simulation.totalGasUsed), 9)} GWEI`)

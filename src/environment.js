@@ -78,12 +78,12 @@ class Environment {
     // }
 
     // Constructor for creating a new liquidator bot for the liquity protocol
-    async createLiquityLiquidator() {
+    async createLiquityLiquidator(liquityLiquidatorContractAddress) {
         // Create the liquidator bot
         let liquidator = new LiquityBot(this.flashBotsSender);
 
         // Initialize
-        await liquidator.initialize();
+        await liquidator.initialize(liquityLiquidatorContractAddress);
 
         // Add the bot to the liquidators list
         this.liquidators.push(liquidator);

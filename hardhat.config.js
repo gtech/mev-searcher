@@ -61,6 +61,7 @@ const ERC20ABI = [
 // })
 
 module.exports = {
+  //defaultNetwork: "hardhat" , when you want to fork.
   defaultNetwork: "hardhat",
   networks: {
     myNode: {
@@ -97,8 +98,8 @@ module.exports = {
         // blockNumber : 12490309//289 https://etherscan.io/tx/0xc1f986f4a3b00341eb10de213ca0d2879603525c6d3f06eb426cd0aa1230dbd5 sushiswap
         // blockNumber : 12499519//307 https://etherscan.io/tx/0x3a67611ba94054c624842621a837be29589aa222b4d2c84adb0f753a66b6d258 uniswap
         // blockNumber : 13013897	 //Very recent block
-        // blockNumber : 13179379	 //Latest liquity liquidation https://etherscan.io/tx/0x7abce26a0f3420348c9ded1b2059eebfc686db5c9f2601a1b4d5eb4963336eb0
-        blockNumber: 13966337 //https://etherscan.io/tx/0xedb94f13bc1c640174061398a8800a8ed8cca4746670ee8c21a2eae776781b03
+        blockNumber : 13179379	 //Latest liquity liquidation https://etherscan.io/tx/0x7abce26a0f3420348c9ded1b2059eebfc686db5c9f2601a1b4d5eb4963336eb0
+        // blockNumber: 13966336 //https://etherscan.io/tx/0xedb94f13bc1c640174061398a8800a8ed8cca4746670ee8c21a2eae776781b03
       }
     },
   },

@@ -29,7 +29,7 @@ const {
 module.exports = {
     env: {
         HEALTH_CHECK_URL: HEALTH_CHECK_URL || "",
-        MINER_REWARD_PERCENTAGE: parseInt(MINER_PERCENTAGE || '1'),
+        MINER_PERCENTAGE: parseInt(MINER_PERCENTAGE || '1'),
         THRESHHOLD_FOR_LIQUIDATION: parseInt(THRESHHOLD_FOR_LIQUIDATION),
 
         NETWORK,

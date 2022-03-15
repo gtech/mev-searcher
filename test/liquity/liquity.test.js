@@ -18,11 +18,29 @@ describe("Liquity Protocol Tests", function () {
         // Make sure we are using a test net / fork
         expect(env.NETWORK === "MAINNET" && !(env.NETWORK_FORK)).to.be.equal(false);
 
+        let executorWallet = new Wallet(env.PRIVATE_KEY, ethers.provider);
+        await network.provider.send("hardhat_setBalance", [
+            executorWallet.address,
+            "0x100000000000000000000"
+        ]);
+
+        let LiquityLiquidator = await ethers.getContractFactory('LiquityLiquidator');
+
+
+        let liquityLiquidatorContract = await LiquityLiquidator.deploy(executorWallet.address, {gasLimit: 6000000});
+        console.log("LiquityLiquidator deployed to: ", liquityLiquidatorContract.address);
+
+        const deploymentData = LiquityLiquidator.interface.encodeDeploy([executorWallet.address]);
+
+        // Determine the gas required to deploy the contract
+        const estimatedGas = await ethers.provider.estimateGas({data: deploymentData});
+        console.log("took approx this much gas: " + estimatedGas);
+
         // Create and initialize the environment parent class
         environment = new Environment();
-        await environment.initialize()
+        await environment.initialize();
+        liquidator = await environment.createLiquityLiquidator(liquityLiquidatorContract.address);
 
-        liquidator = await environment.createLiquityLiquidator();
     });
 
     // Check liquity bot initialization
@@ -38,14 +56,6 @@ describe("Liquity Protocol Tests", function () {
     describe("liquidate troves", function () {
 
         it("should make some ether", async function () {
-
-            //TODO Need to find a way to deal with not having a balance on the test wallet address on the fork
-            // const [executorWallet] = await ethers.getSigners();
-            let executorWallet = new Wallet(env.PRIVATE_KEY, ethers.provider);
-            await network.provider.send("hardhat_setBalance", [
-                executorWallet.address,
-                "0x100000000000000000000"
-            ]);
 
             await liquidator.liquidateTroves();
 

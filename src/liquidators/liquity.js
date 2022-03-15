@@ -9,10 +9,9 @@ const { getTimestamp, sleep } = require("../utilities/utils");
 const NUMBER_OF_TROVES_TO_LIQUIDATE = 30;
 const NO_LIQUIDATIONS = "VM Exception while processing transaction: reverted with reason string 'TroveManager: nothing to liquidate'";
 const LUSD = "0x5f98805A4E8be255a32880FDeC7F6728C6568bA0";
-const NOT_DEPLOYED_ON_MAINNET = false;
 
 class Liquity {
-    MINER_REWARD_PERCENTAGE;
+    MINER_PERCENTAGE;
     THRESHOLD_FOR_LIQUIDATION;
 
     flashbotsSender;
@@ -22,52 +21,33 @@ class Liquity {
 
     constructor(flashbotsSender) {
         this.flashbotsSender = flashbotsSender;
-        this.MINER_REWARD_PERCENTAGE = env.MINER_REWARD_PERCENTAGE;
+        this.MINER_PERCENTAGE = env.MINER_PERCENTAGE;
         this.THRESHOLD_FOR_LIQUIDATION = env.THRESHHOLD_FOR_LIQUIDATION;
     }
 
-    async initialize() {
+    async initialize(liquityLiquidatorContractAddress) {
         const [owner] = await ethers.getSigners();
         this.executorWallet = new Wallet(env.PRIVATE_KEY, ethers.provider);
 
-        await owner.provider._networkPromise;
-        let LiquityLiquidator = await ethers.getContractFactory("LiquityLiquidator");
-
         // Initialize the liquityLiquidator contract address
-        if (owner.provider._network.chainId === 31337 && NOT_DEPLOYED_ON_MAINNET) {
-            // If the code is being run in a test environment, then it needs to deploy the contract to testnet
+        let liquityContract = await ethers.getContractAt(
+            "LiquityLiquidator",
+            liquityLiquidatorContractAddress
+        );
 
-            this.liquityLiquidatorContract = await LiquityLiquidator.deploy(this.executorWallet.address, {gasLimit: 600000});
-            console.log("LiquityLiquidator deployed to: ", this.liquityLiquidatorContract.address);
-
-            const deploymentData = LiquityLiquidator.interface.encodeDeploy([this.executorWallet.address]);
-
-            // Determine the gas required to deploy the contract
-            const estimatedGas = await ethers.provider.estimateGas({data: deploymentData});
-            console.log("took approx this much gas: " + estimatedGas);
-
-        } else {
-            // Set
-            this.liquityLiquidatorContract = await ethers.getContractAt(
-                "LiquityLiquidator",
-                env.CONTRACT_ADDRESS__LIQUITY_LIQUIDATOR
-            );
-        }
+        this.liquityLiquidatorContract = liquityContract.connect(this.executorWallet);
     }
-
 
     async liquidateTroves() {
         let originalBalance = await this.executorWallet.getBalance();
-        let numberOfTroves = NUMBER_OF_TROVES_TO_LIQUIDATE;
-
         while (true) {
             let theoreticalLiquidationBounty;
             try {
                 // Run the liquidateTroves function using the callStatic parameter to test and verify the contract, as
                 // well as calculate the bounty received from the liquidation
                 theoreticalLiquidationBounty = await this.liquityLiquidatorContract.callStatic.liquidateTroves(
-                    this.MINER_REWARD_PERCENTAGE,
-                    numberOfTroves
+                    this.MINER_PERCENTAGE,
+                    NUMBER_OF_TROVES_TO_LIQUIDATE
                 );
             } catch (error) {
                 // If there are no liquidation than sleep for five seconds and try again
@@ -82,7 +62,7 @@ class Liquity {
 
                 // If the request failed to emulate, cut the number of troves in half and try again
                 if (error.message.includes("Request timed out.")) {
-                    console.log("number of troves we're trying to liquidate " + numberOfTroves);
+                    console.log("number of troves we're trying to liquidate " + NUMBER_OF_TROVES_TO_LIQUIDATE);
                 }
                 await sleep(5000);
                 continue;
@@ -95,8 +75,8 @@ class Liquity {
 
                     // Build the transaction information for the liquidateTroves function
                     const liquidationTransaction = await this.liquityLiquidatorContract.populateTransaction.liquidateTroves(
-                        this.MINER_REWARD_PERCENTAGE,
-                        numberOfTroves,
+                        this.MINER_PERCENTAGE,
+                        NUMBER_OF_TROVES_TO_LIQUIDATE,
                         {
                             type: 2,
                             value: 0,
@@ -104,13 +84,18 @@ class Liquity {
                     )
 
                     // execute the transaction on the main-net using flashbots
-                    //TODO Test this on goerli
-                    await this.flashbotsSender.sendIt(
+                    //TODO Test flashbots simulation now on Goerli and create some sort of fallback if it doesn't work. There are liquidations that happened around 2022-01-21 22:51:29 so we need to figure out why the simulations didn't work and how much we would have made.
+
+                    let result = await this.flashbotsSender.sendIt(
                         liquidationTransaction,
                         this.liquityLiquidatorContract,
                         this.executorWallet
                     );
-                    numberOfTroves = NUMBER_OF_TROVES_TO_LIQUIDATE;
+
+                    if(result === false){
+                        await sleep(5000);
+                        continue;
+                    }
 
                     // Grab the balance of the wallet
                     const latestBalance = await this.executorWallet.getBalance();
