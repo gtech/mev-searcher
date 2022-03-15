@@ -11,7 +11,7 @@ class Environment {
     // Const
     ETHEREUM_RPC_URL;
     FLASHBOTS_RELAY_SIGNING_KEY;
-    MINER_REWARD_PERCENTAGE;
+    MINER_PERCENTAGE;
     HEALTH_CHECK_URL;
 
     provider;
@@ -27,7 +27,7 @@ class Environment {
         // Define constants
         this.ETHEREUM_RPC_URL = env.ETHEREUM_RPC_URL;
         this.FLASHBOTS_RELAY_SIGNING_KEY = env.FLASHBOTS_RELAY_SIGNING_KEY;
-        this.MINER_REWARD_PERCENTAGE = env.MINER_REWARD_PERCENTAGE;
+        this.MINER_PERCENTAGE = env.MINER_PERCENTAGE;
         this.HEALTH_CHECK_URL = env.HEALTH_CHECK_URL;
 
         this.liquidators = [];

@@ -1,4 +1,4 @@
-const {parseBoolean} = require("../../test/utils");
+const {parseBoolean} = require("../utilities/utils");
 
 const {config: dotenvConfig} = require("dotenv");
 const {resolve} = require("path");
