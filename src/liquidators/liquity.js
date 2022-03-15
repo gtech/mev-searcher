@@ -69,7 +69,6 @@ class Liquity {
                     this.MINER_REWARD_PERCENTAGE,
                     numberOfTroves
                 );
-                await sleep(5000);
             } catch (error) {
                 // If there are no liquidation than sleep for five seconds and try again
                 if (error.message === NO_LIQUIDATIONS || error.message.includes("cannot estimate gas")) {
@@ -85,6 +84,7 @@ class Liquity {
                 if (error.message.includes("Request timed out.")) {
                     console.log("number of troves we're trying to liquidate " + numberOfTroves);
                 }
+                await sleep(5000);
                 continue;
             }
 

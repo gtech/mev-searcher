@@ -4,6 +4,7 @@ const {ethers, network} = require("hardhat");
 const {Environment} = require("../../src/environment");
 const {parseBoolean} = require("../../src/utilities/utils");
 const {env} = require("../../src/constants/env");
+const {Wallet} = require("ethers");
 
 
 describe("Liquity Protocol Tests", function () {
@@ -39,22 +40,17 @@ describe("Liquity Protocol Tests", function () {
         it("should make some ether", async function () {
 
             //TODO Need to find a way to deal with not having a balance on the test wallet address on the fork
-            const [executorWallet] = await ethers.getSigners();
+            // const [executorWallet] = await ethers.getSigners();
+            let executorWallet = new Wallet(env.PRIVATE_KEY, ethers.provider);
             await network.provider.send("hardhat_setBalance", [
                 executorWallet.address,
                 "0x100000000000000000000"
             ]);
+
             await liquidator.liquidateTroves();
 
             // expect(profit.gt(0.2)).to.be.true();
 
-            // await historicalWalk(environment,liq, 2387);
         })
     })
-
-    // describe("", function () {
-    //     it("", function () {
-    //
-    //     })
-    // })
 });
