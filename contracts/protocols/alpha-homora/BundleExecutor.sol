@@ -3,15 +3,15 @@ pragma solidity 0.6.12;
 
 import "hardhat/console.sol";
 // import "./IWMasterChef2.sol";
-import "./homora-v2/interfaces/IWMasterChef.sol";
-import "./homora-v2/interfaces/IBank.sol";
+import "./interfaces/IWMasterChef.sol";
+import "./interfaces/IBank.sol";
 // import './IUniswapV2Router01.sol';
-import "./homora-v2/interfaces/IUniswapV2Router02.sol";
-import { FlashLoanReceiverBase } from "../protocols/liquity/types/FlashLoanReceiverBase.sol";
-import { ILendingPool, ILendingPoolAddressesProvider} from "./Interfaces.sol";
+import "./interfaces/IUniswapV2Router02.sol";
+import { FlashLoanReceiverBase } from "../liquity/types/FlashLoanReceiverBase.sol";
+import { ILendingPool, ILendingPoolAddressesProvider} from "./interfaces/Interfaces.sol";
 import "@openzeppelin/contracts/token/ERC1155/ERC1155Holder.sol";
 //TODO I think I can get safemath from somewhere else.
-import { SafeMath } from "./Libraries.sol";
+import { SafeMath } from "./interfaces/Libraries.sol";
 
 pragma experimental ABIEncoderV2;
 

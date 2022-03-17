@@ -27,6 +27,7 @@ describe("Alpha Homora Protocol Tests", function(){
             liquidator = await environment.createAlphaHomoraLiquidator();
         } catch (e) {
             console.log(e);
+            return;
         }
         // liquidator.main();
         console.log("test");
