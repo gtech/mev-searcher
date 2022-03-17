@@ -52,7 +52,7 @@ const LIQUITY_ADDRESS = "0xA39739EF8b0231DbFA0DcdA07d7e29faAbCf4bb2";
 //     debtShareOf : object          //mapping(address => uint) debtShareOf; // The debt share for each token.
 //   }
 
-class AlphaHomora {
+    class AlphaHomora {
     // private flashLoaner: Flashloaner;
     // readonly PRIVATE_KEY;
     // readonly BUNDLE_EXECUTOR_ADDRESS;
@@ -844,12 +844,13 @@ class AlphaHomora {
         }
     }
 
+    /**
+     * Creates subprocesses that constantly searches for defaulting positions and updates the account database once per day.
+     * @returns undefined
+     */
     async main(){
         this.searchForLiquidations();
         this.updateDatabasesLoop();
-        while(true){
-            await new Promise(resolve => setTimeout(resolve, 1000 * 60 * 60 * 24)); //sleep a day
-        }
     }
 
     /**
@@ -977,7 +978,7 @@ function removeA(arr) {
     return arr;
 }
 
-module.exports.Liquidator = AlphaHomora;
+module.exports.AlphaHomoraBot = AlphaHomora;
 
 // export class Flashloaner{
 //     //So I think I want this thing to take in a token and an amount, then return a transaction to be bundled.

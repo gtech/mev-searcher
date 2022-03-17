@@ -7,7 +7,12 @@ async function main(){
 
     // Create liquidity bot for liquity
     const liqBot = await environment.createLiquityLiquidator(env.CONTRACT_ADDRESS__LIQUITY_LIQUIDATOR);
-    await liqBot.liquidateTroves();
+    liqBot.liquidateTroves();
+
+    //Makes the program run in an infinite loop.
+    while(true){
+        await new Promise(resolve => setTimeout(resolve, 1000 * 60 * 60 * 24)); //sleep a day
+    }
 }
 
 main();

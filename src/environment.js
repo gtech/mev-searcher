@@ -7,9 +7,10 @@ require("@nomiclabs/hardhat-waffle");
 const {LiquityBot} = require("./liquidators/liquity");
 const {FlashBotsSender} = require('./utilities/flashBotsSender');
 const {env} = require('./constants/env');
+const { AlphaHomoraBot } = require("./liquidators/alphaHomora");
+
 
 class Environment {
-    // Const
     ETHEREUM_RPC_URL;
     FLASHBOTS_RELAY_SIGNING_KEY;
     MINER_PERCENTAGE;
@@ -62,21 +63,23 @@ class Environment {
         this.flashBotsSender = new FlashBotsSender(this.flashbotsProvider);
     }
 
-    // TODO: Add me
-    // // Constructor for creating a new liquidator bot for the Alpha Homora protocol
-    // async createAlphaHomoraLiquidator() {
-    //     // Create the liquidator bot
-    //     let liquidator = new Liquidator(this.flashBotsSender);
-    //
-    //     // Initialize
-    //     await liquidator.initialize();
-    //
-    //     // Add the bot to the liquidators list
-    //     this.liquidators.push(liquidator);
-    //
-    //     // Return the newly created liquidator
-    //     return liquidator;
-    // }
+    /**
+     * Constructor for creating a new liquidator bot for the Alpha Homora protocol
+     * @returns {AlphaHomora}
+     */
+    async createAlphaHomoraLiquidator() {
+        // Create the liquidator bot
+        let liquidator = new AlphaHomoraBot(this.flashBotsSender);
+
+        // Initialize
+        await liquidator.initialize();
+
+        // Add the bot to the liquidators list
+        this.liquidators.push(liquidator);
+
+        // Return the newly created liquidator
+        return liquidator;
+    }
 
     // Constructor for creating a new liquidator bot for the liquity protocol
     async createLiquityLiquidator(liquityLiquidatorContractAddress) {
