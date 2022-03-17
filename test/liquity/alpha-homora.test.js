@@ -4,6 +4,7 @@ const { ethers, network } = require("hardhat");
 const {Environment} = require("../../src/environment");
 const {expect} = require("chai");
 const {parseBoolean} = require("../../src/utilities/utils");
+const {env} = require("../../src/constants/env");
 
 
 describe.skip("Alpha Homora Protocol Tests", function(){
@@ -15,7 +16,7 @@ describe.skip("Alpha Homora Protocol Tests", function(){
         this.timeout(0);
 
         // Make sure we are using a test net / fork
-        expect(env.NETWORK === "MAINNET" && !parseBoolean(env.NETWORK_FORK)).to.be.equal(false);
+        expect(env.NETWORK === "MAINNET" && !(env.NETWORK_FORK)).to.be.equal(false);
 
         // Create and initialize the environment parent class
         environment = new Environment();

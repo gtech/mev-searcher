@@ -98,6 +98,26 @@ class Environment {
             get(this.HEALTH_CHECK_URL).on('error', console.error);
         }
     }
+
+    /**
+     * Resets all transactions and forks the given block on the mainnet fork
+     * @param {Integer} blockNumber The block number that we will reset and fork
+     * @returns {Promise<void>}
+     */
+    async forkBlock(blockNumber){
+        //TODO Test
+        await this.provider.request({
+            method: "hardhat_reset",
+            params: [
+                {
+                    forking: {
+                        jsonRpcUrl: env.__MAINNET_RPC_URL__FORK,
+                        blockNumber: blockNumber,
+                    },
+                },
+            ],
+        });
+    }
 }
 
 module.exports.Environment = Environment;
