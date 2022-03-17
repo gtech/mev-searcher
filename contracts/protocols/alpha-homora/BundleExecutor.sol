@@ -7,8 +7,10 @@ import "./interfaces/IWMasterChef.sol";
 import "./interfaces/IBank.sol";
 // import './IUniswapV2Router01.sol';
 import "./interfaces/IUniswapV2Router02.sol";
-import { FlashLoanReceiverBase } from "../liquity/types/FlashLoanReceiverBase.sol";
-import { ILendingPool, ILendingPoolAddressesProvider} from "./interfaces/Interfaces.sol";
+import { FlashLoanReceiverBase } from "./types/FlashLoanReceiverBase.sol";
+import {ILendingPoolAddressesProvider} from "./interfaces/ILendingPoolAddressesProvider.sol";
+import { ILendingPool} from "./interfaces/ILendingPool.sol";
+
 import "@openzeppelin/contracts/token/ERC1155/ERC1155Holder.sol";
 //TODO I think I can get safemath from somewhere else.
 import { SafeMath } from "./interfaces/Libraries.sol";
