@@ -5,6 +5,7 @@ const {Environment} = require("../../src/environment");
 const {expect} = require("chai");
 const {parseBoolean} = require("../../src/utilities/utils");
 const {env} = require("../../src/constants/env");
+const {next} = require("lodash/seq");
 
 
 describe.skip("Alpha Homora Protocol Tests", function(){
@@ -27,6 +28,10 @@ describe.skip("Alpha Homora Protocol Tests", function(){
     });
 
     it.skip("should make some ether", async function(){
+
+        await environment.forkBlock(2675001);
+
+        console.log()
 
         // console.log("test");
         // let a = liquidator.getCollateralValue(2256);

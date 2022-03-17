@@ -1,5 +1,6 @@
 const {FlashbotsBundleProvider} = require("@flashbots/ethers-provider-bundle");
 const {providers, Wallet} = require("ethers");
+const {network} = require("hardhat");
 const {get} = require("https")
 require("@nomiclabs/hardhat-waffle");
 
@@ -105,8 +106,7 @@ class Environment {
      * @returns {Promise<void>}
      */
     async forkBlock(blockNumber){
-        //TODO Test
-        await this.provider.request({
+        await network.provider.request({
             method: "hardhat_reset",
             params: [
                 {
