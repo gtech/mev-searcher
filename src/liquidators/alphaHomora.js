@@ -18,9 +18,9 @@ const UNISWAP_WERC20_ADDRESS  = "0x06799a1e4792001AA9114F0012b9650cA28059a3";
 const UNISWAP_WERC20_ADDRESS_ALT = "0x011535FD795fD28c749363E080662D62fBB456a7";
 const ALPHA_HOMORA_CORE_ORACLE  = "0x6be987c6d72e25F02f6f061F94417d83a6Aa13fC";
 const FLASHLOAN_FEE_NOMINATOR  = 10009;
-//INSUFFICENT_A or B means this number needs to decrease to accomodate the slippage
+//INSUFFICIENT_A or B means this number needs to decrease to accommodate the slippage
 const LP_SLIPPAGE  = 991;
-//INSUFFICENT_OUTPUT_AMOUNT means this number needs to decrease to accomodate the slippage
+//INSUFFICIENT_OUTPUT_AMOUNT means this number needs to decrease to accommodate the slippage
 const SWAP_SLIPPAGE  = 990;
 const AAVE_LENDING_POOL_ADDRESS_PROVIDER  = "0xB53C1a33016B2DC2fF3653530bfF1848a515c8c5";
 const ONE_TWELVE = BigNumber.from(2**52).mul(BigNumber.from(2**52).mul(BigNumber.from(2**8)));
@@ -160,6 +160,10 @@ const LIQUITY_ADDRESS = "0xA39739EF8b0231DbFA0DcdA07d7e29faAbCf4bb2";
 
     }
 
+        /**
+         * Pokes the Homora bank contract to update the interest fees due for all accounts.
+         *
+         */
     async accrue(){
         for (var token of BANK_TOKENS){
             await this.homoraBankContract.accrue(token).catch((err)=>{console.log(err);});
@@ -192,7 +196,7 @@ const LIQUITY_ADDRESS = "0xA39739EF8b0231DbFA0DcdA07d7e29faAbCf4bb2";
         let collateralETHValue= await this.homoraBankContract.getCollateralETHValue(pID).catch((err)=>{console.log(err);})
         let borrowETHValue= await this.homoraBankContract.getBorrowETHValue(pID).catch((err)=>{console.log(err);})
 
-        if(collateralETHValue == undefined || borrowETHValue == undefined){
+        if(collateralETHValue === undefined || borrowETHValue === undefined){
             return BigNumber.from(0);
         }
         return collateralETHValue.sub(borrowETHValue);
@@ -599,7 +603,7 @@ const LIQUITY_ADDRESS = "0xA39739EF8b0231DbFA0DcdA07d7e29faAbCf4bb2";
     /**
      * Sends off a transaction that liquidates the position for the pID.
      * TODO increase the efficiency of this. A lot of these calls can be eliminated and use the DB.
-     * @param {number} pID Position ID
+     * @param {PositionEntry} positionEntry
      * @returns {boolean} Whether the liquidation was successful.
      */
     async liquidatePosition(positionEntry){
@@ -875,10 +879,10 @@ const LIQUITY_ADDRESS = "0xA39739EF8b0231DbFA0DcdA07d7e29faAbCf4bb2";
      * @returns {BigNumber} The value in ETH of the bounty for liquidating the given position.
      */
     bountyValueInETH(position){
-        let debtTokenPaidcollateralAmount = this.convertForLiquidation(position);
+        let debtTokenPaidCollateralAmount = this.convertForLiquidation(position);
         let lpTokenEntry = this.pricing.findOne({'tokenAddress': position.LPTokenAddress});
-        if (debtTokenPaidcollateralAmount.lt(position.collateralSize)){
-            return debtTokenPaidcollateralAmount.mul(lpTokenEntry.priceRatioOT).div(ONE_TWELVE);
+        if (debtTokenPaidCollateralAmount.lt(position.collateralSize)){
+            return debtTokenPaidCollateralAmount.mul(lpTokenEntry.priceRatioOT).div(ONE_TWELVE);
         } else {
             return BigNumber.from(position.collateralSize).mul(lpTokenEntry.priceRatioOT).div(ONE_TWELVE);
         }
@@ -955,7 +959,7 @@ const LIQUITY_ADDRESS = "0xA39739EF8b0231DbFA0DcdA07d7e29faAbCf4bb2";
      
 
     /**
-     * Returns whethen a given position is in default.
+     * Returns whether a given position is in default.
      * @param {number} positionEntry Position
      * @returns {boolean} Whether the position is in default.
      */
@@ -967,8 +971,13 @@ const LIQUITY_ADDRESS = "0xA39739EF8b0231DbFA0DcdA07d7e29faAbCf4bb2";
     }
 }
 
+/**
+ * Removes specified objects from an input array e.g. removeA([obj1,obj2,obj3], obj1, obj2) = [obj3]
+ * @param arr array of arguments beginning with the input array, and ending with the objects to be removed
+ * @returns {Array} input array without the removed objects
+ */
 function removeA(arr) {
-    var what, a = arguments, L = a.length, ax;
+    let what, a = arguments, L = a.length, ax;
     while (L > 1 && arr.length) {
         what = a[--L];
         while ((ax= arr.indexOf(what)) !== -1) {

@@ -49,7 +49,7 @@ interface IERC20Wrapper {
   function getUnderlyingRate(uint id) external view returns (uint);
 }
 
-// Part: OpenZeppelin/openzeppelin-contracts@3.4.0/Address
+// Part: @openzeppelin/Address
 
 /**
  * @dev Collection of functions related to the address type
@@ -237,7 +237,7 @@ library Address {
     }
 }
 
-// Part: OpenZeppelin/openzeppelin-contracts@3.4.0/SafeMath
+// Part: @openzeppelin/SafeMath
 
 /**
  * @dev Wrappers over Solidity's arithmetic operations with added overflow
@@ -450,7 +450,7 @@ library SafeMath {
     }
 }
 
-// Part: OpenZeppelin/openzeppelin-contracts@3.4.0/Initializable
+// Part: @openzeppelin/Initializable
 
 /**
  * @dev This is a base contract to aid in writing upgradeable contracts, or any kind of contract that will be deployed
