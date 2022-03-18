@@ -156,7 +156,9 @@ const LIQUITY_ADDRESS = "0xA39739EF8b0231DbFA0DcdA07d7e29faAbCf4bb2";
         }
         
         const BASE_ORACLE_ADDRESS = await this.homoraOracleContract.source();
-        this.homoraBaseOracleContract = await ethers.getContractAt("contracts\\TierProxyOracle.sol:IBaseOracle",BASE_ORACLE_ADDRESS);
+        // this.homoraBaseOracleContract = await ethers.getContractAt("contracts\\TierProxyOracle.sol:IBaseOracle",BASE_ORACLE_ADDRESS);
+        this.homoraBaseOracleContract = await ethers.getContractAt("IBaseOracle",BASE_ORACLE_ADDRESS);
+
 
     }
 

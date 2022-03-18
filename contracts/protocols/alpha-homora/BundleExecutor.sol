@@ -7,7 +7,7 @@ import "./interfaces/IWMasterChef.sol";
 import "./interfaces/IBank.sol";
 // import './IUniswapV2Router01.sol';
 import "./interfaces/IUniswapV2Router02.sol";
-import { FlashLoanReceiverBase } from "./types/FlashLoanReceiverBase.sol";
+import { FlashLoanReceiverBase } from "./contracts/FlashLoanReceiverBase.sol";
 import {ILendingPoolAddressesProvider} from "./interfaces/ILendingPoolAddressesProvider.sol";
 import { ILendingPool} from "./interfaces/ILendingPool.sol";
 

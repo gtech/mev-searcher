@@ -7,6 +7,7 @@
 pragma solidity 0.6.12;
 pragma experimental ABIEncoderV2;
 
+import '../interfaces/IBaseOracle.sol';
 
 
 // Part: IAlphaStakingTier
@@ -31,13 +32,13 @@ interface IAlphaStakingTier {
   function updateAlphaTier(uint index, uint upperLimit) external;
 }
 
-// Part: IBaseOracle
-
-interface IBaseOracle {
-  /// @dev Return the value of the given input as ETH per unit, multiplied by 2**112.
-  /// @param token The ERC-20 token to check the value.
-  function getETHPx(address token) external view returns (uint);
-}
+//// Part: IBaseOracle
+//
+//interface IBaseOracle {
+//  /// @dev Return the value of the given input as ETH per unit, multiplied by 2**112.
+//  /// @param token The ERC-20 token to check the value.
+//  function getETHPx(address token) external view returns (uint);
+//}
 
 // Part: IERC20Wrapper
 
