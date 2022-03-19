@@ -26,7 +26,7 @@ const AAVE_LENDING_POOL_ADDRESS_PROVIDER  = "0xB53C1a33016B2DC2fF3653530bfF1848a
 const ONE_TWELVE = BigNumber.from(2**52).mul(BigNumber.from(2**52).mul(BigNumber.from(2**8)));
 const THRESHHOLD_FOR_LIQUIDATION = 10000; //Using USD
 const THRESHHOLD_FOR_FREE_FOR_ALL = 500000; //Using USD
-let ethPrice = 3038; //TODO These probably should be class vars instead of globals.
+let ethPrice = 2958; //TODO These probably should be class vars instead of globals.
 let freeForAll = false; //This flips when we think that we have hit the black swan.
 const BLACKLIST = ['0xf80758aB42C3B07dA84053Fd88804bCB6BAA4b5c', //sUSD/ETH
                     '0xF54025aF2dc86809Be1153c1F20D77ADB7e8ecF4',//Balancer pool token

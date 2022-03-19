@@ -12,8 +12,7 @@ import {ILendingPoolAddressesProvider} from "./interfaces/ILendingPoolAddressesP
 import { ILendingPool} from "./interfaces/ILendingPool.sol";
 
 import "@openzeppelin/contracts/token/ERC1155/ERC1155Holder.sol";
-//TODO I think I can get safemath from somewhere else.
-import { SafeMath } from "../../libraries/SafeMath.sol";
+import { SafeMath } from "@openzeppelin/contracts/math/SafeMath.sol";
 
 pragma experimental ABIEncoderV2;
 

@@ -71,8 +71,6 @@ class Liquity {
             // Check to make sure that the liquidation bounty is worthwhile
             if (formatEther(theoreticalLiquidationBounty) > this.THRESHOLD_FOR_LIQUIDATION) {
                 try {
-                    //TODO We need to consolidate all of my switches because this is getting ridiculous.
-
                     // Build the transaction information for the liquidateTroves function
                     const liquidationTransaction = await this.liquityLiquidatorContract.populateTransaction.liquidateTroves(
                         this.MINER_PERCENTAGE,
