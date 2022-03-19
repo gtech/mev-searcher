@@ -579,7 +579,7 @@ const LIQUITY_ADDRESS = "0xA39739EF8b0231DbFA0DcdA07d7e29faAbCf4bb2";
                                             "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"//USDC
                     ];
                     } else {
-                        let LPToken = await ethers.getContractAt("contracts\\UniswapFlashQuery.sol:IUniswapV2Pair", tokenAddress);
+                        let LPToken = await ethers.getContractAt("IUniswapV2Pair", tokenAddress);
                         let token0 = await LPToken.token0();
                         let token1 = await LPToken.token1();
                         lpTokenMembers = [token0,token1];
@@ -728,7 +728,7 @@ const LIQUITY_ADDRESS = "0xA39739EF8b0231DbFA0DcdA07d7e29faAbCf4bb2";
     }
 
     async getDebtTokensAndAmounts(LPTokenAddress , pID ) {
-        let LPToken = await ethers.getContractAt("contracts\\UniswapFlashQuery.sol:IUniswapV2Pair", LPTokenAddress);
+        let LPToken = await ethers.getContractAt("IUniswapV2Pair", LPTokenAddress);
 
         let token0 = await LPToken.token0();
         let token1 = await LPToken.token1();
