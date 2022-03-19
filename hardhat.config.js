@@ -81,6 +81,7 @@ module.exports = {
       accounts: [env.PRIVATE_KEY]
     },
     hardhat: {
+      // chainId: 31337,
       forking: {
         url: env.__MAINNET_RPC_URL__FORK,
         accounts: [env.PRIVATE_KEY],

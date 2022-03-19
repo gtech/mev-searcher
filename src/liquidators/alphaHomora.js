@@ -118,9 +118,24 @@ const LIQUITY_ADDRESS = "0xA39739EF8b0231DbFA0DcdA07d7e29faAbCf4bb2";
         this.database = new loki('liquidator.db', {
             autoload: true,
             autoloadCallback : () => this.databaseInitialize(),
-            autosave: true, 
+            autosave: true,
             autosaveInterval: 4000 //Four seconds
-        });
+        })
+
+        /**
+         * Returns how much gas is necessary to deploy a given contract
+         * @param deploymentData Array of the contract constructor parameters, e.g. [AAVE_LENDING_POOL_ADDRESS_PROVIDER,this.executorWallet.address]
+         * @param artifactName name of the contract e.g. "FlashBotsMultiCall"
+         * @returns {BigNumber} the amount of gas necessary to deploy the contract
+         */
+        async function calculateDeploymentGas(deploymentData,artifactName){
+            //Calculate how much gas it's going to cost to deploy the executor
+            let FlashBotsMultiCall = await ethers.getContractFactory(artifactName);
+            const encodedDeploymentData = FlashBotsMultiCall.interface.encodeDeploy(deploymentData);
+            const estimatedGas = await ethers.provider.estimateGas({ data: encodedDeploymentData });
+            console.log("took approx this much gas: " + estimatedGas);
+            return estimatedGas;
+        }
 
         await owner.provider._networkPromise;
         if (owner.provider._network.chainId === 31337) {
@@ -128,10 +143,6 @@ const LIQUITY_ADDRESS = "0xA39739EF8b0231DbFA0DcdA07d7e29faAbCf4bb2";
             this.bundleExecutorContract = await FlashBotsMultiCall.deploy(AAVE_LENDING_POOL_ADDRESS_PROVIDER,this.executorWallet.address);
             // this.BUNDLE_EXECUTOR_ADDRESS = this.bundleExecutorContract.address;
             console.log("FlashBotsMultiCall deployed to: ", this.bundleExecutorContract.address);
-
-            const deploymentData = FlashBotsMultiCall.interface.encodeDeploy([AAVE_LENDING_POOL_ADDRESS_PROVIDER,this.executorWallet.address]);
-            const estimatedGas = await ethers.provider.estimateGas({ data: deploymentData });
-            console.log("took approx this much gas: " + estimatedGas);
 
         } else {
             // this.BUNDLE_EXECUTOR_ADDRESS = process.env.BUNDLE_EXECUTOR_ADDRESS;

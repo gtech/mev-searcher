@@ -40,13 +40,14 @@ describe("Alpha Homora Protocol Tests", function(){
 
         await environment.forkBlock(12490308);
 
+        await liquidator.getAndStorePosition(289,1);
+
         let a = liquidator.getCollateralValue(289);
         let b = liquidator.getDebtValue(289);
 
         console.log(formatEther(a));
         console.log(formatEther(b));
 
-        liquidator.getAndStorePosition(289,1);
 
         const ethBalanceBeforeLiquidation = await liquidator.executorWallet.getBalance();
         let positionEntry =  liquidator.positions.findOne({'pID': 289});
