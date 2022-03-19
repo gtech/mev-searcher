@@ -13,7 +13,7 @@ describe("Alpha Homora Protocol Tests", function(){
     let liquidator;
 
     before(async function () {
-        // Set the timeout to 0 as the function loops on forever
+        // Set the timeout to 0 as the function is going to take awhile
         this.timeout(0);
 
         // Make sure we are using a test net / fork
@@ -29,16 +29,17 @@ describe("Alpha Homora Protocol Tests", function(){
             console.log(e);
             return;
         }
-        // liquidator.main();
-        console.log("test");
     });
 
 
 
     //TODO Finish implementing
-    it.skip("should make some ether from liquidating account 289 on block 12490308", async function(){
+    it("should make some ether from liquidating account 289 on block 12490308", async function(){
+        // Set the timeout to 0 as the function is going to take awhile
+        this.timeout(0)
 
-        await environment.forkBlock(12490308);
+        //TODO I think we're going to have a problem initializing in the before if we're going to fork.
+        // await environment.forkBlock(12490308);
 
         await liquidator.getAndStorePosition(289,1);
 

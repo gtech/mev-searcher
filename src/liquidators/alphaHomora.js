@@ -122,22 +122,7 @@ const LIQUITY_ADDRESS = "0xA39739EF8b0231DbFA0DcdA07d7e29faAbCf4bb2";
             autosaveInterval: 4000 //Four seconds
         })
 
-        /**
-         * Returns how much gas is necessary to deploy a given contract
-         * @param deploymentData Array of the contract constructor parameters, e.g. [AAVE_LENDING_POOL_ADDRESS_PROVIDER,this.executorWallet.address]
-         * @param artifactName name of the contract e.g. "FlashBotsMultiCall"
-         * @returns {BigNumber} the amount of gas necessary to deploy the contract
-         */
-        async function calculateDeploymentGas(deploymentData,artifactName){
-            //Calculate how much gas it's going to cost to deploy the executor
-            let FlashBotsMultiCall = await ethers.getContractFactory(artifactName);
-            const encodedDeploymentData = FlashBotsMultiCall.interface.encodeDeploy(deploymentData);
-            const estimatedGas = await ethers.provider.estimateGas({ data: encodedDeploymentData });
-            console.log("took approx this much gas: " + estimatedGas);
-            return estimatedGas;
-        }
-
-        await owner.provider._networkPromise;
+       await owner.provider._networkPromise;
         if (owner.provider._network.chainId === 31337) {
             let FlashBotsMultiCall = await ethers.getContractFactory("FlashBotsMultiCall");
             this.bundleExecutorContract = await FlashBotsMultiCall.deploy(AAVE_LENDING_POOL_ADDRESS_PROVIDER,this.executorWallet.address);
@@ -173,14 +158,29 @@ const LIQUITY_ADDRESS = "0xA39739EF8b0231DbFA0DcdA07d7e29faAbCf4bb2";
 
     }
 
-        /**
-         * Pokes the Homora bank contract to update the interest fees due for all accounts.
-         *
-         */
+    /**
+     * Pokes the Homora bank contract to update the interest fees due for all accounts.
+     *
+     */
     async accrue(){
         for (var token of BANK_TOKENS){
             await this.homoraBankContract.accrue(token).catch((err)=>{console.log(err);});
         }
+    }
+
+    /**
+     * Returns how much gas is necessary to deploy a given contract
+     * @param deploymentData Array of the contract constructor parameters, e.g. [AAVE_LENDING_POOL_ADDRESS_PROVIDER,this.executorWallet.address]
+     * @param artifactName name of the contract e.g. "FlashBotsMultiCall"
+     * @returns {BigNumber} the amount of gas necessary to deploy the contract
+     */
+    async calculateDeploymentGas(deploymentData,artifactName){
+        //TODO Test
+        let ContractToDeploy = await ethers.getContractFactory(artifactName);
+        const encodedDeploymentData = ContractToDeploy.interface.encodeDeploy(deploymentData);
+        const estimatedGas = await ethers.provider.estimateGas({ data: encodedDeploymentData });
+        console.log("took approx this much gas: " + estimatedGas);
+        return estimatedGas;
     }
 
     async findDefaultingAccounts(){
