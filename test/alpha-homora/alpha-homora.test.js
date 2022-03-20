@@ -38,21 +38,25 @@ describe("Alpha Homora Protocol Tests", function(){
         // Set the timeout to 0 as the function is going to take awhile
         this.timeout(0)
 
+        const block = await ethers.provider.getBlock("latest");
+        const currentBlock = block.number;
+        expect(currentBlock).to.equal(12490309);
         //TODO I think we're going to have a problem initializing in the before if we're going to fork.
         // await environment.forkBlock(12490308);
 
+        //TODO After doing this test successfully we need to clean the database of this position.
         let position = await liquidator.getAndStorePosition(289,1);
 
         let a = liquidator.getCollateralValue(position);
         let b = liquidator.getDebtValue(position);
 
-        console.log(formatEther(a));
-        console.log(formatEther(b));
-
+        console.log("value of position's collateral: " + formatEther(a));
+        console.log("value of position's debt:" + formatEther(b));
 
         const ethBalanceBeforeLiquidation = await liquidator.executorWallet.getBalance();
         let positionEntry =  liquidator.positions.findOne({'pID': 289});
-        //TODO test if positon and positionEntry are equivalent
+        //TODO test if position and positionEntry are equivalent
+
         liquidator.liquidatePosition(position);
         const ethBalanceAfterLiquidation = await liquidator.executorWallet.getBalance();
         const profit = ethBalanceAfterLiquidation.sub(ethBalanceBeforeLiquidation);
