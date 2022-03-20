@@ -41,10 +41,10 @@ describe("Alpha Homora Protocol Tests", function(){
         //TODO I think we're going to have a problem initializing in the before if we're going to fork.
         // await environment.forkBlock(12490308);
 
-        await liquidator.getAndStorePosition(289,1);
+        let position = await liquidator.getAndStorePosition(289,1);
 
-        let a = liquidator.getCollateralValue(289);
-        let b = liquidator.getDebtValue(289);
+        let a = liquidator.getCollateralValue(position);
+        let b = liquidator.getDebtValue(position);
 
         console.log(formatEther(a));
         console.log(formatEther(b));
@@ -52,7 +52,8 @@ describe("Alpha Homora Protocol Tests", function(){
 
         const ethBalanceBeforeLiquidation = await liquidator.executorWallet.getBalance();
         let positionEntry =  liquidator.positions.findOne({'pID': 289});
-        liquidator.liquidatePosition(positionEntry);
+        //TODO test if positon and positionEntry are equivalent
+        liquidator.liquidatePosition(position);
         const ethBalanceAfterLiquidation = await liquidator.executorWallet.getBalance();
         const profit = ethBalanceAfterLiquidation.sub(ethBalanceBeforeLiquidation);
         console.log("We made this much ETH: " + formatEther(profit));

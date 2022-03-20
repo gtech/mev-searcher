@@ -295,14 +295,16 @@ const LIQUITY_ADDRESS = "0xA39739EF8b0231DbFA0DcdA07d7e29faAbCf4bb2";
         let positionEntry = this.positions.findOne({'pID': pID});
 
         position = await this.homoraBankContract.positions(pID);
-            
-        if( this.getHex(position.collId) != undefined){
+
+        //This solves an inconsistency in how the collId is stored I think
+        if( this.getHex(position.collId) !== undefined){
             collIdHex = this.getHex(position.collId);
         } else {
             collIdHex = position.collId;
         }
         //Get a relevant werc20 entry for the given collateral token. If it doesn't exist, create it and get back the LPTokenAddress.
         //TODO make sure this DB check works.
+        //TODO This is a little weird, looks like a lot of tokens with the same collId comes up?
         werc20Entries = this.werc20Info.where(function(info) {
             return (info.collId == collIdHex && info.WERC20ContractAddress == position.collToken);
         });
@@ -364,11 +366,14 @@ const LIQUITY_ADDRESS = "0xA39739EF8b0231DbFA0DcdA07d7e29faAbCf4bb2";
             console.log("Updated position " + pID);
         }
 
+        return positionEntry;
         //TODO sanity check for require(tokenFactor.liqIncentive != 0, 'bad underlying borrow');
     }
 
     getHex(bigNum){
-        if (bigNum._hex == undefined){
+        if(typeof(bigNum) == "number") {
+            return BigNumber.from(bigNum);
+        } else if (bigNum._hex === undefined){
             return bigNum.hex;
         } else {
             return bigNum._hex;
