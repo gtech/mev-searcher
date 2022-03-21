@@ -106,6 +106,11 @@ contract FlashBotsMultiCall  is FlashLoanReceiverBase, ERC1155Holder  {
 
         address receiverAddress = address(this);
 
+        //DEBUG
+         {
+             console.log("Is this working?");
+         }
+
         address[] memory assets = new address[](1);
         assets[0] = debtToken;
 

@@ -17,6 +17,8 @@ const CRV_ADDRESS = "0xf1F32C8EEb06046d3cc3157B8F9f72B09D84ee5b";
 const UNISWAP_WERC20_ADDRESS  = "0x06799a1e4792001AA9114F0012b9650cA28059a3";
 const UNISWAP_WERC20_ADDRESS_ALT = "0x011535FD795fD28c749363E080662D62fBB456a7";
 const ALPHA_HOMORA_CORE_ORACLE  = "0x6be987c6d72e25F02f6f061F94417d83a6Aa13fC";
+const ZERO_ADDRESS  =             "0x0000000000000000000000000000000000000000";
+
 const FLASHLOAN_FEE_NOMINATOR  = 10009;
 //INSUFFICIENT_A or B means this number needs to decrease to accommodate the slippage
 const LP_SLIPPAGE  = 991;
@@ -513,8 +515,7 @@ const LIQUITY_ADDRESS = "0xA39739EF8b0231DbFA0DcdA07d7e29faAbCf4bb2";
     async getTokenfactors(token,tierCount){
         let tokenFactors = Array(tierCount);//TODO We're trying to figure out why 3crv doesn't seem to be able to get tierTokenFactors
         for (let tier = 0; tier < tierCount; tier++){
-            let tokenFactorTuple = await this.homoraOracleContract.tierTokenFactors(token,tier);
-            tokenFactors[tier] = tokenFactorTuple;
+            tokenFactors[tier] = await this.homoraOracleContract.tierTokenFactors(token, tier);
         }
         return tokenFactors;
     }
@@ -588,8 +589,8 @@ const LIQUITY_ADDRESS = "0xA39739EF8b0231DbFA0DcdA07d7e29faAbCf4bb2";
                 //TODO We may want to update liqIncentives on the daily update.
                 liqIncentive = await this.homoraOracleContract.liqIncentives(tokenAddress);
                 let lpTokenMembers;
-                if (isCollateral == true){
-                    if (tokenAddress == THREE_CRV_ADDRESS){
+                if (isCollateral === true){
+                    if (tokenAddress === THREE_CRV_ADDRESS){
                         lpTokenMembers = ["0x6b175474e89094c44da98b954eedeac495271d0f",//DAI
                                             "0xdAC17F958D2ee523a2206206994597C13D831ec7",//Tether
                                             "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"//USDC
@@ -642,11 +643,20 @@ const LIQUITY_ADDRESS = "0xA39739EF8b0231DbFA0DcdA07d7e29faAbCf4bb2";
 
         let debtTokenIndex = this.getBiggestDebtTokenIndex(positionEntry);
         let debtToken = positionEntry.debts[0][debtTokenIndex];
+        //TODO I think debtInWETH is whether the debt is in WETH
         const debtInWETH = (debtToken == WETH_ADDRESS)  ? true : false;
-        let secondTokenAddress;
+        //TODO I think this is the collateral token address.
         let members = [...lpTokenEntry.lpTokenMembers];
         let otherTokenAddresses = removeA(members,debtToken);
-        //TODO find the secondTokenAddress
+
+        //Set up the collateral token address(es)
+        let secondTokenAddress;
+        if (otherTokenAddresses.length === 1 ){
+            secondTokenAddress = otherTokenAddresses[0];
+        } else {
+            //TODO control for this or test for cases.
+            throw 'there are more than two tokens in the debt info so we have to control for more than one collateral or debt tokens that we need to exchange.';
+        }
 
         let debtInfo = {debtAmount: positionEntry.debts[1][debtTokenIndex],debtToken: debtToken,secondTokenAddress:secondTokenAddress, debtInWETH: debtInWETH}; 
 
@@ -656,10 +666,10 @@ const LIQUITY_ADDRESS = "0xA39739EF8b0231DbFA0DcdA07d7e29faAbCf4bb2";
         });
         let secondTokenEntry =  this.pricing.findOne({'tokenAddress': secondTokenAddress});
 
-        // getETHPx returns WETH/token
+        // getETHPx returns price ratio of WETH/token
         // //The value of the bounty in ETH. NoOT means that it doesn't have the ONE_TWELVE term. OT means that it's still multiplied by ONE_TWELVE
 
-        //TODO There's a completely different control flow for non-weth pairs like USDC/USDT
+        //TODO There's a completely different control flow for non-WETH pairs like USDC/USDT
         //TODO The control flow changes at whether we're doing uni, crv, or sushi. So we'll create three different functions in the contract, and we'll give the contract which of the three lptoken types it is.
 
         // const colBountyCalculated= await this.homoraOracleContract.convertForLiquidation(debtInfo.debtToken, position.collToken, position.collId, debtInfo.debtAmount);
@@ -685,9 +695,13 @@ const LIQUITY_ADDRESS = "0xA39739EF8b0231DbFA0DcdA07d7e29faAbCf4bb2";
             //secondTokenOutLP
             outLPAmount[1] = bountyLPvalueNoOT.mul(ONE_TWELVE).div(2).div(priceRatioOT).mul(LP_SLIPPAGE).div(1000);
             // debtTokenOutLP = ;
-            // secondTokenOutLP = 
-            amountInSwap = secondTokenOutLP; //This will leave some amount of residue, assuming that we don't hit that max slippage. This may not be a bad thing but we should consider being able to make this swap again later. 
-            amountOutSwap = debtTokenOutLP.mul(SWAP_SLIPPAGE).div(1000);//5444444444
+            // secondTokenOutLP =
+            //TODO is this right?
+            amountInSwap = outLPAmount[1]; //This will leave some amount of residue, assuming that we don't hit that max slippage. This may not be a bad thing but we should consider being able to make this swap again later.
+            //TODO I don't understand this yet. I commented out the first line without getting it
+            // amountOutSwap = debtTokenOutLP.mul(SWAP_SLIPPAGE).div(1000);//5444444444
+            amountOutSwap = outLPAmount[0].mul(SWAP_SLIPPAGE).div(1000);//5444444444
+
         } else {
             priceRatioOT = debtTokenEntry.priceRatioOT;
             secondTokenOutLP = bountyLPvalueNoOT.div(2).mul(LP_SLIPPAGE).div(1000);
@@ -710,9 +724,18 @@ const LIQUITY_ADDRESS = "0xA39739EF8b0231DbFA0DcdA07d7e29faAbCf4bb2";
         
         const deadline  = Math.floor(Date.now() / 1000) + 60 * 5 // 5 minutes from the current Unix time
         //position.collID is the id of the underlying LP token for WERC20 contracts for sushi, but for uni it uses the address of the LP token as the id.
+        //TODO  Implement when we have more than two debt/collateral tokens
+        let thirdTokenAddress;
+        if (otherTokenAddresses.length === 1) {
+            thirdTokenAddress = ZERO_ADDRESS;
+        } else {
+            throw "Implement when we have more than two debt/collateral tokens";
+        }
+
+        //TODO We need to find these values. bountyLPvalueNoOT could not be the right bountyLP amount
         const data = ethers.utils.defaultAbiCoder.encode(
-        ["uint", "uint", "uint",  "address", "uint", "uint", "uint", "uint", "uint", "address","address"],
-        [pID, positionEntry.collId, bountyLP, LPTokenAddress, secondTokenOutLP, debtTokenOutLP, amountInSwap, amountOutSwap, deadline, secondTokenAddress, thirdTokenAddress]
+        ["uint", "uint", "uint",  "address", "uint256[]", "uint", "uint", "uint", "uint", "address","address"],
+        [positionEntry.pID, positionEntry.collId, bountyLPvalueNoOT, LPTokenAddress, outLPAmount, amountInSwap, amountOutSwap, deadline, secondTokenAddress, thirdTokenAddress]
         );
 
         try {
