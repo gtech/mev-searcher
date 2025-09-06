@@ -12,7 +12,9 @@ import {ILendingPoolAddressesProvider} from "./interfaces/ILendingPoolAddressesP
 import { ILendingPool} from "./interfaces/ILendingPool.sol";
 
 import "@openzeppelin/contracts/token/ERC1155/ERC1155Holder.sol";
-import { SafeMath } from "@openzeppelin/contracts/math/SafeMath.sol";
+//import { SafeMath } from "@openzeppelin/contracts/math/SafeMath.sol";
+//import { SafeMath } from "@openzeppelin/contracts/math/SafeMath.sol";
+
 
 pragma experimental ABIEncoderV2;
 
@@ -41,7 +43,8 @@ interface IWETH is IERC20 {
 // This contract simply calls multiple targets sequentially, ensuring WETH balance before and after
 
 contract FlashBotsMultiCall  is FlashLoanReceiverBase, ERC1155Holder  {
-    using SafeMath for uint256;
+//        TODO is this safe?
+//    using SafeMath for uint256;
 
     address private immutable owner;
     address payable private immutable executor;
@@ -105,11 +108,6 @@ contract FlashBotsMultiCall  is FlashLoanReceiverBase, ERC1155Holder  {
         require(msg.sender == owner, "not owner");
 
         address receiverAddress = address(this);
-
-        //DEBUG
-         {
-             console.log("Is this working?");
-         }
 
         address[] memory assets = new address[](1);
         assets[0] = debtToken;
@@ -181,45 +179,48 @@ contract FlashBotsMultiCall  is FlashLoanReceiverBase, ERC1155Holder  {
         require(lp.approve(SUSHISWAP_ROUTER_ADDRESS, flashInfo.LPBounty), 'approve failed.');
 
         //DEBUG
-        // {
-        //     uint a = IERC20(underlying).balanceOf(initiator);
-        //     console.log("My balance of debtToken before liquidation: ");
-        //     console.logUint(a);
-        //     (uint256 LPbalance) = WMASTERCHEF.balanceOf(initiator, flashInfo.masterChefID);
-        //     console.log("LPbalance: ");
-        //     console.logUint(LPbalance);
-        // }
+         {
+             uint a = IERC20(underlying).balanceOf(initiator);
+             console.log("My balance of debtToken before liquidation: ");
+             console.logUint(a);
+             (uint256 LPbalance) = WMASTERCHEF.balanceOf(initiator, flashInfo.masterChefID);
+             console.log("LPbalance: ");
+             console.logUint(LPbalance);
+         }
 
         // console.logUint();
         BANK.liquidate(flashInfo.positionID, underlying ,amount);
 
         //DEBUG
-        // {
-        //     console.log("Successfully Liquidated");
-        //     uint a = IERC20(underlying).balanceOf(initiator);
-        //     console.log("My balance of debtToken after liquidation: ");
-        //     console.logUint(a);
-        //     console.log("Theoretical LPBounty: ");
-        //     console.logUint(flashInfo.LPBounty);
-        //     (uint256 LPbalance) = WMASTERCHEF.balanceOf(initiator, flashInfo.masterChefID);
-        //     console.log("LPbalance after liquidation: ");
-        //     console.logUint(LPbalance);
-        //     uint256 actualLPBalance = lp.balanceOf(initiator);
-        //     console.log("actualLPBalance of the token outside of masterchef before burn: ");
-        //     console.logUint(actualLPBalance);
-        // }
+         {
+             console.log("Successfully Liquidated");
+             uint a = IERC20(underlying).balanceOf(initiator);
+             console.log("My balance of debtToken after liquidation: ");
+             console.logUint(a);
+             console.log("Theoretical LPBounty: ");
+             console.logUint(flashInfo.LPBounty);
+             (uint256 LPbalance) = WMASTERCHEF.balanceOf(initiator, flashInfo.masterChefID);
+             console.log("LPbalance after liquidation: ");
+             console.logUint(LPbalance);
+             uint256 actualLPBalance = lp.balanceOf(initiator);
+             console.log("actualLPBalance of the token outside of masterchef before burn: ");
+             console.logUint(actualLPBalance);
+         }
 
         //TODO Okay it looks like this burn function is slightly different for uni or sushi. For sushi it's a uint and for uni it's an address. We also need a different address lower down here. So there's a major split in functionality here.
         WMASTERCHEF.burn(flashInfo.masterChefID,flashInfo.LPBounty);
+//        WMASTERCHEF.burn(flashInfo.masterChefID,WMASTERCHEF.balanceOf(initiator, flashInfo.masterChefID));
+
 
         //DEBUG
-        // {
-        //     console.log("Grabbed the LPbounty from Masterchef");
-        //     uint256 actualLPBalance = lp.balanceOf(initiator);
-        //     console.log("actualLPBalance of the token outside of masterchef after burn: ");
-        //     console.logUint(actualLPBalance);
-        // }
+         {
+             console.log("Grabbed the LPbounty from Masterchef");
+             uint256 actualLPBalance = lp.balanceOf(initiator);
+             console.log("actualLPBalance of the token outside of masterchef after burn: ");
+             console.logUint(actualLPBalance);
+         }
 
+        //TODO Didn't we pass in the deadline?
         uint deadline = block.timestamp.add(500);
         SUSHI_ROUTER.removeLiquidity(
             underlying,
@@ -232,12 +233,12 @@ contract FlashBotsMultiCall  is FlashLoanReceiverBase, ERC1155Holder  {
         );
 
         //DEBUG
-        // {
-        //     console.log("Balance of WETH before all of the swaps: ");
-        //     uint WETHbalance = WETH.balanceOf(initiator);
-        //     // uint WETHbalance = IERC20(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2).balanceOf(initiator);
-        //     console.logUint(WETHbalance);
-        // }
+         {
+             console.log("Balance of WETH before all of the swaps: ");
+             uint WETHbalance = WETH.balanceOf(initiator);
+             // uint WETHbalance = IERC20(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2).balanceOf(initiator);
+             console.logUint(WETHbalance);
+         }
 
         require(IERC20(flashInfo.secondTokenAddress).approve(address(UNISWAPROUTER), flashInfo.amountInSwap), 'approve failed.');
 
@@ -250,11 +251,12 @@ contract FlashBotsMultiCall  is FlashLoanReceiverBase, ERC1155Holder  {
         }
 
         //DEBUG
-        // {
-        //     console.log("Balance of WETH after all of the swaps: ");
-        //     uint WETHbalance = WETH.balanceOf(initiator);
-        //     console.logUint(WETHbalance);
-        // }
+         {
+             console.log("Balance of WETH after all of the swaps: ");
+             console.logUint(WETH.balanceOf(initiator));
+             console.log("Amount I owe: " );
+             console.logUint(amounts[0].add(premiums[0]));
+         }
 
         // Approve the LendingPool contract allowance to *pull* the owed amount.
         uint amountOwing = amounts[0].add(premiums[0]);
@@ -262,21 +264,21 @@ contract FlashBotsMultiCall  is FlashLoanReceiverBase, ERC1155Holder  {
         WETH.withdraw(WETH.balanceOf(initiator).sub(amountOwing));
 
         //DEBUG
-        // {
-        //     console.log("Balance totals before transfer: ");
-        //     console.log("ETH: ");
-        //     console.logUint(address(this).balance);
-        //     console.log("WETH: ");
-        //     console.logUint(WETH.balanceOf(address(this)));
-        //     uint under = IERC20(underlying).balanceOf(address(this));
-        //     console.log("under: ");
-        //     console.logUint(under);
-        //     uint other = IERC20(flashInfo.secondTokenAddress).balanceOf(address(this));
-        //     console.log("other: ");
-        //     console.logUint(other);
-        //     console.log("owed: ");
-        //     console.logUint(amountOwing);
-        // }
+         {
+             console.log("Balance totals before transfer: ");
+             console.log("ETH: ");
+             console.logUint(address(this).balance);
+             console.log("WETH: ");
+             console.logUint(WETH.balanceOf(address(this)));
+             uint under = IERC20(underlying).balanceOf(address(this));
+             console.log("under: ");
+             console.logUint(under);
+             uint other = IERC20(flashInfo.secondTokenAddress).balanceOf(address(this));
+             console.log("other: ");
+             console.logUint(other);
+             console.log("owed: ");
+             console.logUint(amountOwing);
+         }
 
         //TODO Test this. We can use WAAAAAY less. Probably anyway.
         // if (this.minerPercent != 0){

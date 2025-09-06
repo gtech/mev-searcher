@@ -20,8 +20,11 @@ const ALPHA_HOMORA_CORE_ORACLE  = "0x6be987c6d72e25F02f6f061F94417d83a6Aa13fC";
 const ZERO_ADDRESS  =             "0x0000000000000000000000000000000000000000";
 
 const FLASHLOAN_FEE_NOMINATOR  = 10009;
+//TODO This slippage is weirdly high, there must be some error in my calculations of the LP values.
 //INSUFFICIENT_A or B means this number needs to decrease to accommodate the slippage
-const LP_SLIPPAGE  = 991;
+// const LP_SLIPPAGE  = 991;
+const LP_SLIPPAGE  = 940;
+
 //INSUFFICIENT_OUTPUT_AMOUNT means this number needs to decrease to accommodate the slippage
 const SWAP_SLIPPAGE  = 990;
 const AAVE_LENDING_POOL_ADDRESS_PROVIDER  = "0xB53C1a33016B2DC2fF3653530bfF1848a515c8c5";
@@ -65,6 +68,7 @@ const LIQUITY_ADDRESS = "0xA39739EF8b0231DbFA0DcdA07d7e29faAbCf4bb2";
     homoraBankContract;
     defaultingAccounts;
     NAIVE_ACCOUNTS;
+    ALPHA_TIER_ADDRESS;
 
     wMasterChefContract;
     CRVContract
@@ -147,10 +151,11 @@ const LIQUITY_ADDRESS = "0xA39739EF8b0231DbFA0DcdA07d7e29faAbCf4bb2";
         //TODO Sometimes there aren't tiers...
         this.homoraOracleContract = await ethers.getContractAt("TierProxyOracle", HOMORA_ORACLE_ADDRESS);
         try {
-            let ALPHA_TIER_ADDRESS = await this.homoraOracleContract.alphaTier();
-            this.alphaTierContract = await ethers.getContractAt("IAlphaStakingTier",ALPHA_TIER_ADDRESS);
+            this.ALPHA_TIER_ADDRESS = await this.homoraOracleContract.alphaTier();
+            this.alphaTierContract = await ethers.getContractAt("IAlphaStakingTier",this.ALPHA_TIER_ADDRESS);
         } catch (error) {
             console.log("There is no alpha tier yet." + error);
+            this.ALPHA_TIER_ADDRESS = ZERO_ADDRESS;
         }
         
         const BASE_ORACLE_ADDRESS = await this.homoraOracleContract.source();
@@ -249,6 +254,7 @@ const LIQUITY_ADDRESS = "0xA39739EF8b0231DbFA0DcdA07d7e29faAbCf4bb2";
         }
         
         this.werc20Info.insert({LPTokenAddress: LPTokenAddress, collId: collIdHex, WERC20ContractAddress: collToken});
+        //TODO There's a but that creates 0x6c3F90f043a72FA612cbac8115EE7e52BDe6E490 token over and over again I think. The collId looks different though
         console.log("Created werc20Info for LPToken: " + LPTokenAddress + " and collId " + collIdHex);
         return LPTokenAddress;
     }
@@ -315,6 +321,7 @@ const LIQUITY_ADDRESS = "0xA39739EF8b0231DbFA0DcdA07d7e29faAbCf4bb2";
         } else if (werc20Entries.length == 0){
             LPTokenAddress =  await this.createWERC20InfoEntry(collIdHex, position.collToken);
             if (LPTokenAddress == "0x6c3F90f043a72FA612cbac8115EE7e52BDe6E490"){
+                //TODO We need to actually setup 3CRV, there's lots of tether value there.
                 //Fuck 3CRV
                 return false;
             }
@@ -407,7 +414,7 @@ const LIQUITY_ADDRESS = "0xA39739EF8b0231DbFA0DcdA07d7e29faAbCf4bb2";
 
     /**
      * Returns the value of all debts in ETH for a given position.
-     * @param {number} positionEntry Position 
+     * @param {Position} positionEntry Position
      * @returns {BigNumber} The value in ETH of the position, probably * 2**112. or 0 if it's unsuccessful.
      */
     getDebtValue(positionEntry){
@@ -432,8 +439,16 @@ const LIQUITY_ADDRESS = "0xA39739EF8b0231DbFA0DcdA07d7e29faAbCf4bb2";
             let debtAmount = BigNumber.from(amounts[tokenIndex]);
             let tokenEntry = this.pricing.findOne({'tokenAddress': tokenAddress});
 
+            //TODO test all this is the context of the proxycontract over time
             //The borrowFactor is the first index of the tokenFactors.
-            let borrowFactor = tokenEntry.tokenFactors[BigNumber.from(tier).toNumber()][0];
+            let borrowFactor;
+            if (this.ALPHA_TIER_ADDRESS != ZERO_ADDRESS){
+                //TODO shouldn't this be 0?
+                borrowFactor = tokenEntry.tokenFactors[0][0];
+            } else {
+                //TODO shouldn't this be 0?
+                borrowFactor = tokenEntry.tokenFactors[BigNumber.from(tier).toNumber()][0];
+            }
             if (borrowFactor >= 50000){
                 console.log("ERROR: Invalid borrowfactor: " + borrowFactor + "for position: " + pID);
                 return BigNumber.from(0);
@@ -489,7 +504,14 @@ const LIQUITY_ADDRESS = "0xA39739EF8b0231DbFA0DcdA07d7e29faAbCf4bb2";
         }
         let amountUnderlying = BigNumber.from(positionEntry.collateralSize).mul(underlyingRate).div(ONE_TWELVE);
         let tier = positionEntry.tier;
-        let collateralFactor = tokenEntry.tokenFactors[BigNumber.from(tier).toNumber()][1];
+        //TODO This is different if alphatier is different
+        let collateralFactor;
+        if (this.ALPHA_TIER_ADDRESS != ZERO_ADDRESS){
+            //TODO this might not be the right index
+            collateralFactor = tokenEntry.tokenFactors[0][BigNumber.from(tier).toNumber()];
+        } else {
+            collateralFactor = tokenEntry.tokenFactors[BigNumber.from(tier).toNumber()][1];
+        }
 
         //TODO Create this check.
         //     require(liqIncentives[tokenUnderlying] != 0, 'bad underlying collateral');
@@ -514,7 +536,11 @@ const LIQUITY_ADDRESS = "0xA39739EF8b0231DbFA0DcdA07d7e29faAbCf4bb2";
      */
     async getTokenfactors(token,tierCount){
         let tokenFactors = Array(tierCount);//TODO We're trying to figure out why 3crv doesn't seem to be able to get tierTokenFactors
+        if(this.ALPHA_TIER_ADDRESS === ZERO_ADDRESS){
+            return await this.homoraOracleContract.tokenFactors(token);
+        }
         for (let tier = 0; tier < tierCount; tier++){
+            //TODO Depending on the version of the oracle contract, you do or do not need the tier
             tokenFactors[tier] = await this.homoraOracleContract.tierTokenFactors(token, tier);
         }
         return tokenFactors;
@@ -549,7 +575,7 @@ const LIQUITY_ADDRESS = "0xA39739EF8b0231DbFA0DcdA07d7e29faAbCf4bb2";
         for (let pID = 1; pID < nextPositionId; pID++){
             if (await this.getAndStorePosition(pID,tierCount) == false){
                 flawlessUpdate = false;
-            };
+            }
         }
         return flawlessUpdate;
     }
@@ -643,14 +669,15 @@ const LIQUITY_ADDRESS = "0xA39739EF8b0231DbFA0DcdA07d7e29faAbCf4bb2";
 
         let debtTokenIndex = this.getBiggestDebtTokenIndex(positionEntry);
         let debtToken = positionEntry.debts[0][debtTokenIndex];
-        //TODO I think debtInWETH is whether the debt is in WETH
-        const debtInWETH = (debtToken == WETH_ADDRESS)  ? true : false;
-        //TODO I think this is the collateral token address.
+        //Find whether WETH is the token that was borrowed
+        const debtInWETH = (debtToken === WETH_ADDRESS)  ? true : false;
         let members = [...lpTokenEntry.lpTokenMembers];
+        //TODO If there is more than one debt token then we need to find them as well. Wait I'm not sure this is true
         let otherTokenAddresses = removeA(members,debtToken);
 
         //Set up the collateral token address(es)
         let secondTokenAddress;
+        //TODO this might not actually be necessary because we may only be able to pay one debt token at a time
         if (otherTokenAddresses.length === 1 ){
             secondTokenAddress = otherTokenAddresses[0];
         } else {
@@ -658,8 +685,8 @@ const LIQUITY_ADDRESS = "0xA39739EF8b0231DbFA0DcdA07d7e29faAbCf4bb2";
             throw 'there are more than two tokens in the debt info so we have to control for more than one collateral or debt tokens that we need to exchange.';
         }
 
-        let debtInfo = {debtAmount: positionEntry.debts[1][debtTokenIndex],debtToken: debtToken,secondTokenAddress:secondTokenAddress, debtInWETH: debtInWETH}; 
-
+        //TODO not valid if there is more than 1 debt token
+        let debtInfo = {debtAmount: positionEntry.debts[1][debtTokenIndex],debtToken: debtToken,secondTokenAddress:secondTokenAddress, debtInWETH: debtInWETH};
         let debtTokenEntry =  this.pricing.findOne({'tokenAddress': debtToken});
         let otherTokenEntries = this.positions.where(function(obj) {
             return (otherTokenAddresses.includes(obj.tokenAddress));
@@ -688,12 +715,15 @@ const LIQUITY_ADDRESS = "0xA39739EF8b0231DbFA0DcdA07d7e29faAbCf4bb2";
         let amountsInSwap = [];
         
         if (debtInWETH){
-            //So this part is always going to be true because there are only ever two coins when WETH is one of the two. We just need to convert it to use arrays instead of numbers. TODO We are currently 
+            //So this part is always going to be true because there are only ever two coins when WETH is one of the two. We just need to convert it to use arrays instead of numbers.
             priceRatioOT = secondTokenEntry.priceRatioOT;
             //ETH value of the debt token that will come out of the LP burn. aka debtTokenOutLP
             outLPAmount[0] = bountyLPvalueNoOT.div(2).mul(LP_SLIPPAGE).div(1000);
+            console.log("number of debt(WETH) tokens coming from the LP: " + formatEther(outLPAmount[0]));
             //secondTokenOutLP
             outLPAmount[1] = bountyLPvalueNoOT.mul(ONE_TWELVE).div(2).div(priceRatioOT).mul(LP_SLIPPAGE).div(1000);
+            console.log("number of pair tokens coming from the LP: " + formatEther(outLPAmount[1]));
+
             // debtTokenOutLP = ;
             // secondTokenOutLP =
             //TODO is this right?
@@ -732,17 +762,25 @@ const LIQUITY_ADDRESS = "0xA39739EF8b0231DbFA0DcdA07d7e29faAbCf4bb2";
             throw "Implement when we have more than two debt/collateral tokens";
         }
 
+        //Convert the value of the bounty that will be paid in LP tokens from its ETH value to the number of LP tokens.
+        let LPTokenBounty = bountyLPvalueNoOT.mul(ONE_TWELVE.div(BigNumber.from(lpTokenEntry.priceRatioOT)));
+
+        ONE_TWELVE.div(BigNumber.from(lpTokenEntry.priceRatioOT))
+
         //TODO We need to find these values. bountyLPvalueNoOT could not be the right bountyLP amount
         const data = ethers.utils.defaultAbiCoder.encode(
-        ["uint", "uint", "uint",  "address", "uint256[]", "uint", "uint", "uint", "uint", "address","address"],
-        [positionEntry.pID, positionEntry.collId, bountyLPvalueNoOT, LPTokenAddress, outLPAmount, amountInSwap, amountOutSwap, deadline, secondTokenAddress, thirdTokenAddress]
+        ["uint", "uint", "uint",  "address", "uint256[]", "uint", "uint", "uint", "address","address"],
+        [positionEntry.pID, positionEntry.collId, LPTokenBounty, LPTokenAddress, outLPAmount, amountInSwap, amountOutSwap, deadline, secondTokenAddress, thirdTokenAddress]
         );
 
+        let result;
         try {
-            await this.bundleExecutorContract.flashLiquidate(debtInfo.debtToken,debtInfo.debtAmount,data);
+            result = await this.bundleExecutorContract.flashLiquidate(debtInfo.debtToken,debtInfo.debtAmount,data);
         } catch (error) {
             console.log("ERROR: The liquidation transaction failed " + error);
         }
+
+        console.log("result of flashLiquidate: " + result);
 
         return true;
     }
@@ -922,6 +960,7 @@ const LIQUITY_ADDRESS = "0xA39739EF8b0231DbFA0DcdA07d7e29faAbCf4bb2";
     bountyValueInETH(position){
         let debtTokenPaidCollateralAmount = this.convertForLiquidation(position);
         let lpTokenEntry = this.pricing.findOne({'tokenAddress': position.LPTokenAddress});
+        //TODO Currently in this function fixing this  blockNumber : 13820582 //AH Liq sushiswap pID 1943 https://etherscan.io/tx/0x6071c5d8ba9cca1ad745a64a3e607a51ec4fcd519c8956c8488b8ef5ecc58748 because it's not calculating how much LP reward we'll get. Use etherscan/tenderly to see how the calculation differs.
         if (debtTokenPaidCollateralAmount.lt(position.collateralSize)){
             return debtTokenPaidCollateralAmount.mul(lpTokenEntry.priceRatioOT).div(ONE_TWELVE);
         } else {
@@ -966,7 +1005,7 @@ const LIQUITY_ADDRESS = "0xA39739EF8b0231DbFA0DcdA07d7e29faAbCf4bb2";
    * @returns The collateral LPToken amount equivalent to the greatest debt token.
    */
     convertForLiquidation(position){
-        //TODO test function
+        //TODO test function, not valid for more than one debt token yet.
         let lpTokenEntry = this.pricing.findOne({'tokenAddress': position.LPTokenAddress});
         let debtTokenIndex = this.getBiggestDebtTokenIndex(position);
         let debtTokenEntry = this.pricing.findOne({'tokenAddress': position.debts[0][debtTokenIndex]});

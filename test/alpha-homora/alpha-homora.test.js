@@ -34,18 +34,22 @@ describe("Alpha Homora Protocol Tests", function(){
 
 
     //TODO Finish implementing
-    it("should make some ether from liquidating account 289 on block 12490308", async function(){
+    it("should make some ether from liquidating account 1943 on block 13820583", async function(){
         // Set the timeout to 0 as the function is going to take awhile
         this.timeout(0)
 
+        const pID = 1943;
+
         const block = await ethers.provider.getBlock("latest");
         const currentBlock = block.number;
-        expect(currentBlock).to.equal(12490309);
+        expect(currentBlock).to.equal(13820583);
+
         //TODO I think we're going to have a problem initializing in the before if we're going to fork.
         // await environment.forkBlock(12490308);
 
         //TODO After doing this test successfully we need to clean the database of this position.
-        let position = await liquidator.getAndStorePosition(289,1);
+        //TODO We may have a problem with LP token's pricing not being updated. getandstoreposition needs to update LP tokens and all debt and collateral tokens because they will change rapidly when this thing is going on.
+        let position = await liquidator.getAndStorePosition(pID,1);
 
         let a = liquidator.getCollateralValue(position);
         let b = liquidator.getDebtValue(position);
@@ -54,16 +58,27 @@ describe("Alpha Homora Protocol Tests", function(){
         console.log("value of position's debt:" + formatEther(b));
 
         const ethBalanceBeforeLiquidation = await liquidator.executorWallet.getBalance();
-        let positionEntry =  liquidator.positions.findOne({'pID': 289});
+        let positionEntry =  liquidator.positions.findOne({'pID': pID});
         //TODO test if position and positionEntry are equivalent
 
-        liquidator.liquidatePosition(position);
+        await liquidator.liquidatePosition(position);
         const ethBalanceAfterLiquidation = await liquidator.executorWallet.getBalance();
         const profit = ethBalanceAfterLiquidation.sub(ethBalanceBeforeLiquidation);
         console.log("We made this much ETH: " + formatEther(profit));
         // expect(profit.gt(0.2)).to.be.true();
 
 
+    });
+
+    it.skip("gets the debt token with the greatest value borrowed", async function(){
+        this.timeout(0);
+        const block = await ethers.provider.getBlock("latest");
+        const currentBlock = block.number;
+        expect(currentBlock).to.equal(12490309);
+
+        //TODO After doing this test successfully we need to clean the database of this position.
+        let position = await liquidator.getAndStorePosition(289,1);
+        await liquidator.getBiggestDebtTokenIndex(position)
     });
 
     //TODO Database integrity checks

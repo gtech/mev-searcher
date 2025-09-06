@@ -91,7 +91,7 @@ interface IBank {
   ) external;
 
   /// @dev Liquidate a position.
-  function liquidate(
+  function  (
     uint positionId,
     address debtToken,
     uint amountCall
